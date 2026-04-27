@@ -1,0 +1,14 @@
+[theme]
+# Palette Allianz : bleu institutionnel + accent vert renouvelables
+primaryColor = "#003781"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F6FA"
+textColor = "#1E1E1E"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+runOnSave = true

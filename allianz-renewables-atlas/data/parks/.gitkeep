@@ -1,0 +1,2 @@
+# Dossier rempli en Phase 3 par scripts/precompute_all.py.
+# Structure : data/parks/<park_id>/{metadata.json, sentinel.png, production_estimated.json, delta.json}

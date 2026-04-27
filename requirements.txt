@@ -1,0 +1,26 @@
+# Core Streamlit
+streamlit>=1.32.0
+python-dotenv>=1.0.0
+
+# Globe 3D
+pydeck>=0.9.0
+
+# Cartes & viz
+folium>=0.15.0
+streamlit-folium>=0.15.0
+plotly>=5.18.0
+pandas>=2.1.0
+pyyaml>=6.0.0
+
+# Data fetching
+requests>=2.31.0
+
+# Image manipulation (Sentinel-2 RGB processing)
+pillow>=10.0.0
+
+# Validation
+pydantic>=2.5.0
+
+# Dev
+pytest>=8.0.0
+ruff>=0.3.0

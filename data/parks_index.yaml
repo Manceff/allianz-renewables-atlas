@@ -1,0 +1,197 @@
+# Master index des parcs Renewables Allianz Capital Partners publiquement identifiables.
+# À enrichir en Phase 1 (cartographie initiale) — research depuis press releases ACP, presse spé, opérateurs.
+#
+# Schéma par parc :
+#   id: slug-unique
+#   name: nom canonique
+#   country: code ISO 3166-1 alpha-2 (ou label complet)
+#   technology: solar | onshore_wind | offshore_wind | battery_storage
+#   coordinates: [lat, lon]
+#   capacity_mwp: float (MWp pour solar, MW pour wind)
+#   commissioning_year: int
+#   operator: nom de l'opérateur partenaire
+#   allianz_stake_pct: float (null si non public)
+#   acquisition_year: int (année où ACP a acquis)
+#   press_release_url: URL canonique du communiqué ACP
+#   notes: optionnel
+#   has_pvgis_estimate: bool (true pour solaires only)
+#   has_reported_production: bool (true si l'opérateur publie sa production annuelle)
+
+parks:
+  # === SOLAIRE IBERIA (pipeline analytique complet) ===
+
+  - id: ourika
+    name: "Ourika Solar Park"
+    country: PT
+    technology: solar
+    coordinates: [37.65, -8.22]  # Ourique, Beja District, Alentejo — à raffiner
+    capacity_mwp: 46
+    commissioning_year: 2018
+    operator: "WElink Energy"
+    allianz_stake_pct: 100
+    acquisition_year: 2018
+    press_release_url: "https://www.allianzcapitalpartners.com/media/news/102518-allianz-acquires-first-subsidy-free-solar-project-iberia/"
+    notes: "Premier parc subsidy-free d'Iberia. 80 GWh/an commissioning, alimente 23 000 foyers."
+    has_pvgis_estimate: true
+    has_reported_production: true
+
+  - id: solara-4
+    name: "Solara 4"
+    country: PT
+    technology: solar
+    coordinates: [37.95, -8.87]  # Sines, Portugal — à raffiner
+    capacity_mwp: 219
+    commissioning_year: 2019
+    operator: "WElink + China Triumph International Engineering"
+    allianz_stake_pct: 100
+    acquisition_year: 2018
+    press_release_url: "https://www.allianzcapitalpartners.com/media/news/121818-allianz-acquire-largest-subsidy-free-solar-project-portugal/"
+    notes: "Plus grand parc subsidy-free du Portugal au moment de l'acquisition"
+    has_pvgis_estimate: true
+    has_reported_production: false  # à vérifier
+
+  - id: grenergy-spain-300
+    name: "Grenergy 300 MW Spain Portfolio"
+    country: ES
+    technology: solar
+    coordinates: [40.0, -3.7]  # Spain centre, multi-sites — à raffiner par site
+    capacity_mwp: 300
+    commissioning_year: 2025
+    operator: "Grenergy Renovables"
+    allianz_stake_pct: 100
+    acquisition_year: 2025
+    press_release_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
+    notes: "270M€ deal value. Multi-sites Espagne."
+    has_pvgis_estimate: true
+    has_reported_production: false
+
+  - id: brindisi
+    name: "Brindisi Solar"
+    country: IT
+    technology: solar
+    coordinates: [40.63, 17.94]  # Brindisi, Apulia — à raffiner
+    capacity_mwp: null  # à rechercher
+    commissioning_year: 2010
+    operator: "à rechercher"
+    allianz_stake_pct: null
+    acquisition_year: 2010
+    press_release_url: "à rechercher dans archives Allianz 2010"
+    notes: "Premier investissement solaire d'Allianz Specialised Investments en 2010"
+    has_pvgis_estimate: true
+    has_reported_production: false
+
+  # === ONSHORE WIND (visuel + métadonnées only en v1) ===
+
+  - id: dahme
+    name: "Dahme Wind Farm"
+    country: DE
+    technology: onshore_wind
+    coordinates: [51.87, 13.42]  # Dahme, Brandenburg — à raffiner
+    capacity_mwp: 76
+    commissioning_year: 2013
+    operator: "à rechercher"
+    allianz_stake_pct: null
+    acquisition_year: 2013
+    press_release_url: "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html"
+    notes: "80 km au sud de Berlin. Acquis 2013 dans le cadre du programme 400M€ renewables ACP."
+    has_pvgis_estimate: false
+    has_reported_production: false
+
+  - id: erchie
+    name: "Erchie Wind Farm"
+    country: IT
+    technology: onshore_wind
+    coordinates: [40.45, 17.79]  # Erchie, Apulia — à raffiner
+    capacity_mwp: 30
+    commissioning_year: 2013
+    operator: "à rechercher"
+    allianz_stake_pct: null
+    acquisition_year: 2013
+    press_release_url: "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html"
+    notes: "Acquis 2013 dans portfolio européen ACP"
+    has_pvgis_estimate: false
+    has_reported_production: false
+
+  - id: enertrag-poland
+    name: "Enertrag Poland Portfolio"
+    country: PL
+    technology: onshore_wind
+    coordinates: [52.0, 21.0]  # Pologne — à raffiner par parc spécifique
+    capacity_mwp: null  # multiple parks
+    commissioning_year: 2010
+    operator: "Enertrag"
+    allianz_stake_pct: null
+    acquisition_year: 2010
+    press_release_url: "https://www.allianz.com/en/mediacenter/news/financials/stakes_investments/201007_Allianz-Enertrag-renewable-energy-installations-Poland.html"
+    notes: "Premiers investissements ACP en Pologne. Plusieurs parcs combinés."
+    has_pvgis_estimate: false
+    has_reported_production: false
+
+  - id: france-2013-portfolio
+    name: "France 2013 Wind Portfolio"
+    country: FR
+    technology: onshore_wind
+    coordinates: [46.5, 2.5]  # France centre — à raffiner par parc
+    capacity_mwp: 64  # 5 parks combined
+    commissioning_year: 2013
+    operator: "à rechercher (5 parcs distincts)"
+    allianz_stake_pct: null
+    acquisition_year: 2013
+    press_release_url: "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html"
+    notes: "5 parcs éoliens combinés acquis en 2013"
+    has_pvgis_estimate: false
+    has_reported_production: false
+
+  # === OFFSHORE WIND (Sentinel-1 SAR pour visuel, pas de production estimée v1) ===
+
+  - id: galloper
+    name: "Galloper Offshore Wind Farm"
+    country: GB
+    technology: offshore_wind
+    coordinates: [52.05, 1.95]  # 27 km off Suffolk coast — à raffiner
+    capacity_mwp: 353
+    commissioning_year: 2018
+    operator: "RWE (operator) + co-investors"
+    allianz_stake_pct: 25
+    acquisition_year: 2018
+    press_release_url: "à rechercher"
+    notes: "Co-détention RWE + ACP + Macquarie + Siemens. 27 km off Suffolk."
+    has_pvgis_estimate: false
+    has_reported_production: false
+
+  - id: empire-wind-1
+    name: "Empire Wind 1"
+    country: US
+    technology: offshore_wind
+    coordinates: [40.55, -73.50]  # 24 km off NY coast — à raffiner
+    capacity_mwp: 810
+    commissioning_year: 2026  # en construction
+    operator: "Equinor + BP"
+    allianz_stake_pct: null  # à confirmer
+    acquisition_year: 2020
+    press_release_url: "à rechercher"
+    notes: "En construction. 24 km off New York. Stake ACP à confirmer publiquement."
+    has_pvgis_estimate: false
+    has_reported_production: false
+
+# === À COMPLÉTER EN PHASE 1 ===
+#
+# Cibles additionnelles à rechercher dans les archives ACP / presse spé :
+# - Parcs solaires italiens 2010-2015
+# - Parcs onshore wind Suède / Finlande / Pays-Bas
+# - Battery storage projects récents (si disclosed)
+# - Parcs offshore wind UK / Mer du Nord
+#
+# Sources de research :
+# - https://www.allianzcapitalpartners.com/en/media/news (archive complete)
+# - https://www.thewindpower.net/ (cross-référencement coordonnées)
+# - https://www.openstreetmap.org/ (géocodage précis)
+# - PV Tech, Renews.biz, Infrastructure Investor, AltAssets
+
+# === COMPTEUR TRANSPARENCE (à afficher sur le globe) ===
+metadata:
+  total_parks_mapped: 10  # à mettre à jour après Phase 1
+  total_parks_claimed_by_acp: 150  # corporate communication
+  capacity_total_mw: 1898  # somme des capacities mappées
+  countries_covered: ["PT", "ES", "IT", "DE", "PL", "FR", "GB", "US"]
+  source_disclaimer: "Périmètre publiquement identifiable depuis press releases ACP. Le reste du portefeuille (~120+ parcs) est détenu indirectement via fonds infra (Macquarie Infrastructure, Brookfield Infrastructure, etc.) sans nom public des assets sous-jacents."
