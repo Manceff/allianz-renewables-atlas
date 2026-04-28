@@ -97,7 +97,10 @@ TECHNOLOGY_COLORS = {
 }
 
 filtered_df = filtered.copy()
-filtered_df["color"] = filtered_df["technology"].map(TECHNOLOGY_COLORS).fillna([128, 128, 128, 200])
+# .apply() au lieu de .map().fillna([liste]) — pandas refuse une liste comme valeur de fillna
+filtered_df["color"] = filtered_df["technology"].apply(
+    lambda t: TECHNOLOGY_COLORS.get(t, [128, 128, 128, 200])
+)
 filtered_df["height"] = filtered_df["capacity_mwp"].fillna(50) * 1000  # exagération visuelle pour 3D
 
 # ScatterplotLayer pour les markers de base
@@ -124,14 +127,17 @@ column_layer = pdk.Layer(
     elevation_scale=10,
 )
 
-# View state initial : centré Europe, vue 3D
+# View state initial : centré Europe, globe 3D rotatif
 view_state = pdk.ViewState(
     longitude=10,
     latitude=48,
-    zoom=2,
-    pitch=45,
+    zoom=1.2,
+    pitch=0,
     bearing=0,
 )
+
+# _GlobeView pour rendu globe 3D (vs Mercator plat). Expérimental PyDeck mais marche.
+globe_view = pdk.View(type="_GlobeView", controller=True)
 
 # Tooltip au hover
 tooltip = {
@@ -145,12 +151,13 @@ tooltip = {
 deck = pdk.Deck(
     layers=[column_layer, scatter_layer],
     initial_view_state=view_state,
+    views=[globe_view],
     tooltip=tooltip,
-    map_provider="carto",
-    map_style="dark",
+    map_provider=None,  # _GlobeView n'utilise pas de basemap classique
+    parameters={"cull": True},
 )
 
-st.pydeck_chart(deck, use_container_width=True, height=600)
+st.pydeck_chart(deck, width="stretch")
 
 st.caption(
     "💡 Survole un marker pour les détails. Click + drag pour faire tourner. "

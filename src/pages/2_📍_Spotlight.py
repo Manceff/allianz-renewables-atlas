@@ -69,7 +69,7 @@ col4.metric(
 sentinel_path = park_dir / "sentinel.png"
 if sentinel_path.exists():
     st.markdown("### 🛰 Image satellite Sentinel-2")
-    st.image(str(sentinel_path), caption=f"Source : ESA Copernicus Sentinel-2", use_container_width=True)
+    st.image(str(sentinel_path), caption="Source : ESA Copernicus Sentinel-2", width="stretch")
 else:
     st.warning(
         f"Image satellite non disponible pour {selected_park['name']}. "
@@ -125,7 +125,7 @@ if selected_park["technology"] == "solar" and selected_park.get("has_pvgis_estim
                     labels={"period": "Mois", "production_mwh": "Production (MWh)"},
                     color_discrete_sequence=["#fbbf24"],
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
             except ImportError:
                 st.dataframe(monthly)
     else:

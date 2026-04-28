@@ -62,7 +62,7 @@ sources_df = pd.DataFrame(
     ]
 )
 
-st.dataframe(sources_df, hide_index=True, use_container_width=True)
+st.dataframe(sources_df, hide_index=True, width="stretch")
 
 st.divider()
 
