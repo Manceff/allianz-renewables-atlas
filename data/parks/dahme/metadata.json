@@ -1,0 +1,19 @@
+{
+  "id": "dahme",
+  "name": "Dahme Wind Farm",
+  "country": "DE",
+  "technology": "onshore_wind",
+  "coordinates": [
+    51.87,
+    13.42
+  ],
+  "capacity_mwp": 76,
+  "commissioning_year": 2013,
+  "operator": "à rechercher",
+  "allianz_stake_pct": null,
+  "acquisition_year": 2013,
+  "press_release_url": "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html",
+  "notes": "80 km au sud de Berlin. Acquis 2013 dans le cadre du programme 400M€ renewables ACP.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

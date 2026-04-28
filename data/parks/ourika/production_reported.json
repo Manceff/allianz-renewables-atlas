@@ -1,0 +1,9 @@
+{
+  "park_id": "ourika",
+  "annual_total_mwh": 80000,
+  "year": 2018,
+  "source": "Allianz Capital Partners press release (25 octobre 2018)",
+  "url": "https://www.allianzcapitalpartners.com/media/news/102518-allianz-acquires-first-subsidy-free-solar-project-iberia/",
+  "method": "commissioning_estimate",
+  "note": "Estimation publiée à la mise en service : ~80 GWh/an alimentant 23 000 foyers. Pas une production mesurée d'opérateur — seed manuel doctrine R4 (source ACP)."
+}

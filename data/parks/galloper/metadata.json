@@ -1,0 +1,19 @@
+{
+  "id": "galloper",
+  "name": "Galloper Offshore Wind Farm",
+  "country": "GB",
+  "technology": "offshore_wind",
+  "coordinates": [
+    52.05,
+    1.95
+  ],
+  "capacity_mwp": 353,
+  "commissioning_year": 2018,
+  "operator": "RWE (operator) + co-investors",
+  "allianz_stake_pct": 25,
+  "acquisition_year": 2018,
+  "press_release_url": "à rechercher",
+  "notes": "Co-détention RWE + ACP + Macquarie + Siemens. 27 km off Suffolk.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

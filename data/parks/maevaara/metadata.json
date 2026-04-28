@@ -1,0 +1,19 @@
+{
+  "id": "maevaara",
+  "name": "Maevaara Wind Farm",
+  "country": "SE",
+  "technology": "onshore_wind",
+  "coordinates": [
+    66.8791,
+    23.3859
+  ],
+  "capacity_mwp": 105,
+  "commissioning_year": 2015,
+  "operator": "OX2",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2013,
+  "press_release_url": "https://www.allianzcapitalpartners.com/en/media/news/060513-allianz-acquires-wind-farm-sweden",
+  "notes": "Premier deal construction-loan-puis-equity ACP en Suède. Phase 1 (72 MW) commissioning avril 2015 ; Phase 2 (33 MW) closing 2016. Électricité vendue à Google sous PPA. Coords gem.wiki (Maevaara_wind_farm).",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

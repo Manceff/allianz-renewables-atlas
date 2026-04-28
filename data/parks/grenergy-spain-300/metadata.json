@@ -1,0 +1,19 @@
+{
+  "id": "grenergy-spain-300",
+  "name": "Grenergy 300 MW Spain Portfolio",
+  "country": "ES",
+  "technology": "solar",
+  "coordinates": [
+    40.0,
+    -3.7
+  ],
+  "capacity_mwp": 300,
+  "commissioning_year": 2025,
+  "operator": "Grenergy Renovables",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2025,
+  "press_release_url": "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf",
+  "notes": "270M€ deal value. Multi-sites Espagne.",
+  "has_pvgis_estimate": true,
+  "has_reported_production": false
+}

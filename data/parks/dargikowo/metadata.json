@@ -1,0 +1,19 @@
+{
+  "id": "dargikowo",
+  "name": "Dargikowo Wind Farm (Dunowo project)",
+  "country": "PL",
+  "technology": "onshore_wind",
+  "coordinates": [
+    54.0158,
+    16.0632
+  ],
+  "capacity_mwp": 133.0,
+  "commissioning_year": 2022,
+  "operator": "ENERTRAG",
+  "allianz_stake_pct": 100.0,
+  "acquisition_year": 2020,
+  "press_release_url": "https://www.allianz.com/en/mediacenter/news/financials/stakes_investments/201007_Allianz-Enertrag-renewable-energy-installations-Poland.html",
+  "notes": "Premier investissement equity renouvelables ACP en Pologne (oct 2020). 43 turbines, partie du projet Dunowo (Dargikowo + Karlino = 186 MW). Sources : Allianz PR + GEM Wiki.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

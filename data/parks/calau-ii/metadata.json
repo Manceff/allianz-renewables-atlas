@@ -1,0 +1,19 @@
+{
+  "id": "calau-ii",
+  "name": "Calau II (C+D) Wind Farm",
+  "country": "DE",
+  "technology": "onshore_wind",
+  "coordinates": [
+    51.7428,
+    13.9633
+  ],
+  "capacity_mwp": 30.8,
+  "commissioning_year": 2014,
+  "operator": "PNE WIND AG (developer)",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2014,
+  "press_release_url": "https://www.pnewind.com/en/info-center-news-en/438-pne-wind-ag-calau-ii-d-wind-farm-commissioned-and-handed-over-to-allianz/",
+  "notes": "Phases C+D du parc forestier Calau II en Oberspreewald-Lausitz, Brandenburg. Vendu par PNE WIND au fonds renewables ACP en 2014. 10 x Vestas V112/3.0 MW. Coords thewindpower.net (id 16461). Source canonique opérateur.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

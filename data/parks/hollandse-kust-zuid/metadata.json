@@ -1,0 +1,19 @@
+{
+  "id": "hollandse-kust-zuid",
+  "name": "Hollandse Kust Zuid",
+  "country": "NL",
+  "technology": "offshore_wind",
+  "coordinates": [
+    52.3,
+    4.2
+  ],
+  "capacity_mwp": 1509.0,
+  "commissioning_year": 2023,
+  "operator": "Vattenfall",
+  "allianz_stake_pct": 25.2,
+  "acquisition_year": 2021,
+  "press_release_url": "https://www.allianz.com/en/mediacenter/news/business/asset_management/211206_Allianz-to-invest-in-offshore-wind-farm-in-Netherlands-for-first-time.html",
+  "notes": "Premier investissement offshore wind ACP. 25.2% acheté à BASF déc 2021 ; co-détenu avec Vattenfall (51%) et BASF. Coords = centroid approx. zone HKZ, mer du Nord ~22 km au large de Noordwijk.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": true
+}

@@ -1,0 +1,19 @@
+{
+  "id": "forterre",
+  "name": "La Forterre Wind Farm",
+  "country": "FR",
+  "technology": "onshore_wind",
+  "coordinates": [
+    47.6554,
+    3.4534
+  ],
+  "capacity_mwp": 28,
+  "commissioning_year": 2014,
+  "operator": "RES (Renewable Energy Systems)",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2014,
+  "press_release_url": "https://www.allianz.com/en/press/news/financials/stakes_investments/141110-investment-in-renewable-energy-exceeds-two-billion.html",
+  "notes": "14 x Vestas V100/2.0 MW sur les Plateaux de Bourgogne, communes Ouanne et Merry-Sec, Yonne (89). Acquisition française phare 2014 ACP citée dans le communiqué milestone 2 Md€. Coords thewindpower.net (id 21504).",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

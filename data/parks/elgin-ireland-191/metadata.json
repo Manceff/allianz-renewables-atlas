@@ -1,0 +1,19 @@
+{
+  "id": "elgin-ireland-191",
+  "name": "Elgin Ireland Solar Portfolio (16 sites)",
+  "country": "IE",
+  "technology": "solar",
+  "coordinates": [
+    53.77,
+    -7.16
+  ],
+  "capacity_mwp": 191.0,
+  "commissioning_year": 2025,
+  "operator": "Elgin Energy",
+  "allianz_stake_pct": null,
+  "acquisition_year": 2023,
+  "press_release_url": "https://www.elgin.com/news/elgin-energy-celebrates-milestone-portfolio-sale",
+  "notes": "Portefeuille de 16 sites solaires en Irlande (14 RESS-2, 2 RESS-3). Coords = Oldcastle, Co. Meath (site nommé) en proxy portefeuille ; aussi Edgeworthstown (Longford) et Kilmacthomas (Waterford). Énergisation 2024-2025. ~300M€. Source canonique opérateur (pas de PR ACP).",
+  "has_pvgis_estimate": true,
+  "has_reported_production": false
+}

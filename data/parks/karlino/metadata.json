@@ -1,0 +1,19 @@
+{
+  "id": "karlino",
+  "name": "Karlino Wind Farm (Dunowo project)",
+  "country": "PL",
+  "technology": "onshore_wind",
+  "coordinates": [
+    54.041,
+    15.8793
+  ],
+  "capacity_mwp": 53.0,
+  "commissioning_year": 2022,
+  "operator": "ENERTRAG",
+  "allianz_stake_pct": 100.0,
+  "acquisition_year": 2020,
+  "press_release_url": "https://www.allianz.com/en/mediacenter/news/financials/stakes_investments/201007_Allianz-Enertrag-renewable-energy-installations-Poland.html",
+  "notes": "16 turbines ; co-acquis avec Dargikowo oct 2020. Inauguré sept 2022 dans le cadre du projet Dunowo. Sources : Allianz PR + GEM Wiki.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

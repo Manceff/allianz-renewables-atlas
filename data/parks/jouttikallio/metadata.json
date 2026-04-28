@@ -1,0 +1,19 @@
+{
+  "id": "jouttikallio",
+  "name": "Jouttikallio Wind Park",
+  "country": "FI",
+  "technology": "onshore_wind",
+  "coordinates": [
+    62.9288,
+    23.0595
+  ],
+  "capacity_mwp": 21,
+  "commissioning_year": 2017,
+  "operator": "OX2",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2016,
+  "press_release_url": "https://www.ox2.com/newsroom/press-releases-news/2017/successful-inauguration-of-the-jouttikallio-wind-farm-in-finland/",
+  "notes": "Premier parc éolien Allianz en Finlande (signature jan 2016, inauguration 2017). 6 x Vestas V126 à Lapua, ~80 km de Vaasa. Coords thewindpower.net (id 24972). Source canonique opérateur (PR ACP archive 404).",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

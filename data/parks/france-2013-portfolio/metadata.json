@@ -1,0 +1,19 @@
+{
+  "id": "france-2013-portfolio",
+  "name": "France 2013 Wind Portfolio",
+  "country": "FR",
+  "technology": "onshore_wind",
+  "coordinates": [
+    46.5,
+    2.5
+  ],
+  "capacity_mwp": 64,
+  "commissioning_year": 2013,
+  "operator": "à rechercher (5 parcs distincts)",
+  "allianz_stake_pct": null,
+  "acquisition_year": 2013,
+  "press_release_url": "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html",
+  "notes": "5 parcs éoliens combinés acquis en 2013",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

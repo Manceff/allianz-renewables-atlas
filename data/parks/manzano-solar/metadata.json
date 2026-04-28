@@ -1,0 +1,19 @@
+{
+  "id": "manzano-solar",
+  "name": "Manzano Solar Park",
+  "country": "IT",
+  "technology": "solar",
+  "coordinates": [
+    45.9888,
+    13.3763
+  ],
+  "capacity_mwp": 11.2,
+  "commissioning_year": 2010,
+  "operator": "IBC Solar (O&M)",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2011,
+  "press_release_url": "https://www.pv-tech.org/ibc_solar_sells_11-2mw_italian_park_to_allianz_specialised_investments/",
+  "notes": "Grid-connected 7 Dec 2010, sold by IBC Solar to Allianz Specialised Investments early 2011. 47 000 polycrystalline + 3 600 thin-film modules sur 32 ha à Manzano (Udine, Friuli-VG). ~13 GWh/an. Source : PV-Tech.",
+  "has_pvgis_estimate": true,
+  "has_reported_production": false
+}

@@ -1,0 +1,19 @@
+{
+  "id": "erchie",
+  "name": "Erchie Wind Farm",
+  "country": "IT",
+  "technology": "onshore_wind",
+  "coordinates": [
+    40.45,
+    17.79
+  ],
+  "capacity_mwp": 30,
+  "commissioning_year": 2013,
+  "operator": "à rechercher",
+  "allianz_stake_pct": null,
+  "acquisition_year": 2013,
+  "press_release_url": "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html",
+  "notes": "Acquis 2013 dans portfolio européen ACP",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

@@ -1,0 +1,19 @@
+{
+  "id": "brindisi",
+  "name": "Brindisi Solar",
+  "country": "IT",
+  "technology": "solar",
+  "coordinates": [
+    40.63,
+    17.94
+  ],
+  "capacity_mwp": null,
+  "commissioning_year": 2010,
+  "operator": "à rechercher",
+  "allianz_stake_pct": null,
+  "acquisition_year": 2010,
+  "press_release_url": "à rechercher dans archives Allianz 2010",
+  "notes": "Premier investissement solaire d'Allianz Specialised Investments en 2010",
+  "has_pvgis_estimate": true,
+  "has_reported_production": false
+}

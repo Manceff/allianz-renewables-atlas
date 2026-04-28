@@ -1,0 +1,19 @@
+{
+  "id": "iles-yeu-noirmoutier",
+  "name": "Iles d'Yeu et Noirmoutier Offshore Wind Farm",
+  "country": "FR",
+  "technology": "offshore_wind",
+  "coordinates": [
+    46.87,
+    -2.51
+  ],
+  "capacity_mwp": 496.0,
+  "commissioning_year": 2026,
+  "operator": "Ocean Winds (EDPR + ENGIE)",
+  "allianz_stake_pct": 20.25,
+  "acquisition_year": 2025,
+  "press_release_url": "https://www.allianzgi.com/en/press-centre/media/press-releases/20260122-allianz-invests-in-the-500mw-french-offshore-wind-farm-iles-dyeu-et-noirmoutier",
+  "notes": "AllianzGI a acquis 20.25% à Ocean Winds (signature oct 2025, closing janv 2026). 200M€. 62 x SGRE D8 au large de la Vendée. First power juin 2025 ; full COD Q1 2026. Source : AllianzGI press release janv 2026 ; coords thewindpower.net.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

@@ -1,0 +1,19 @@
+{
+  "id": "empire-wind-1",
+  "name": "Empire Wind 1",
+  "country": "US",
+  "technology": "offshore_wind",
+  "coordinates": [
+    40.55,
+    -73.5
+  ],
+  "capacity_mwp": 810,
+  "commissioning_year": 2026,
+  "operator": "Equinor + BP",
+  "allianz_stake_pct": null,
+  "acquisition_year": 2020,
+  "press_release_url": "à rechercher",
+  "notes": "En construction. 24 km off New York. Stake ACP à confirmer publiquement.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

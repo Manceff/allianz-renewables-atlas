@@ -1,0 +1,47 @@
+{
+  "inputs": {
+    "lat": 40.0,
+    "lon": -3.7,
+    "peakpower_kw": 300000.0,
+    "tilt_deg": 30.0,
+    "azimuth_deg": 0.0,
+    "loss_pct": 14.0,
+    "pv_technology": "crystSi"
+  },
+  "monthly_production_kwh": [
+    30520126.88,
+    32745405.77,
+    42004942.77,
+    43855582.11,
+    47375507.73,
+    47883098.37,
+    51514632.87,
+    49734501.45,
+    44067364.3,
+    37686287.62,
+    29951895.82,
+    28974601.31
+  ],
+  "annual_total_kwh": 486313947.0,
+  "annual_total_mwh": 486313.947,
+  "metadata": {
+    "source": "PVGIS v5.2 (JRC EU)",
+    "raddatabase": "PVGIS-SARAH2",
+    "year_min": 2005,
+    "year_max": 2020
+  },
+  "raw_totals_fixed": {
+    "E_d": 1332366.98,
+    "E_m": 40526162.25,
+    "E_y": 486313947.0,
+    "H(i)_d": 5.74,
+    "H(i)_m": 174.52,
+    "H(i)_y": 2094.24,
+    "SD_m": 1251294.02,
+    "SD_y": 15015528.27,
+    "l_aoi": -2.65,
+    "l_spec": "0.51",
+    "l_tg": -8.02,
+    "l_total": -22.59
+  }
+}

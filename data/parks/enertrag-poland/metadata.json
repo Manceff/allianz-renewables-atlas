@@ -1,0 +1,19 @@
+{
+  "id": "enertrag-poland",
+  "name": "Enertrag Poland Portfolio",
+  "country": "PL",
+  "technology": "onshore_wind",
+  "coordinates": [
+    52.0,
+    21.0
+  ],
+  "capacity_mwp": null,
+  "commissioning_year": 2010,
+  "operator": "Enertrag",
+  "allianz_stake_pct": null,
+  "acquisition_year": 2010,
+  "press_release_url": "https://www.allianz.com/en/mediacenter/news/financials/stakes_investments/201007_Allianz-Enertrag-renewable-energy-installations-Poland.html",
+  "notes": "Premiers investissements ACP en Pologne. Plusieurs parcs combinés. Voir aussi dargikowo + karlino (sous-actifs précis du projet Dunowo).",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

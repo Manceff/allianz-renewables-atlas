@@ -1,0 +1,19 @@
+{
+  "id": "he-dreiht",
+  "name": "He Dreiht Offshore Wind Farm",
+  "country": "DE",
+  "technology": "offshore_wind",
+  "coordinates": [
+    54.365,
+    6.186
+  ],
+  "capacity_mwp": 960.0,
+  "commissioning_year": 2026,
+  "operator": "EnBW",
+  "allianz_stake_pct": 16.6,
+  "acquisition_year": 2023,
+  "press_release_url": "https://www.allianzcapitalpartners.com/en/media/news/032323-allianz-to-invest-in-960mw-offshore-wind-farm-hedreiht-in-the-german-north-sea",
+  "notes": "ACP a acquis 16.6% (consortium 49.9% avec NBIM + AIP) ; ~85-95 km au large de Borkum, mer du Nord allemande. 64 x SG 15 MW. Source : ACP press release mars 2023 ; coords thewindpower.net.",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}

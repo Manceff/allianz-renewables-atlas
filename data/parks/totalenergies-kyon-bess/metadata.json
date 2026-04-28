@@ -1,0 +1,19 @@
+{
+  "id": "totalenergies-kyon-bess",
+  "name": "TotalEnergies/Kyon German BESS Portfolio (11 sites)",
+  "country": "DE",
+  "technology": "battery_storage",
+  "coordinates": [
+    51.165,
+    10.451
+  ],
+  "capacity_mwp": 789.0,
+  "commissioning_year": 2028,
+  "operator": "Kyon Energy (TotalEnergies)",
+  "allianz_stake_pct": 50.0,
+  "acquisition_year": 2026,
+  "press_release_url": "https://www.allianzcapitalpartners.com/en/media/news/20260303-allianzgi-partners-with-totalenergies",
+  "notes": "AllianzGI (Allianz European Infrastructure Fund II) acquiert 50% de 11 projets BESS auprès de TotalEnergies ; 789 MW / 1628 MWh ; 500M€. Tous opérationnels d'ici 2028. Coords = centroid DE (lat/lon des sites non encore publics).",
+  "has_pvgis_estimate": false,
+  "has_reported_production": false
+}
