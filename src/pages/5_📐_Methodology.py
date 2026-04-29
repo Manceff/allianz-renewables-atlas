@@ -198,9 +198,9 @@ La logique de coloration green/yellow/red des deltas
 `src/lib/compute_delta.py` (fonction `severity_from_relative_delta`) :
 
 - **GREEN** — `|delta_pct| < 5%` : *aligned with estimate*.
-- **YELLOW** — `5% ≤ |delta_pct| < 15%` : *monitor — within model
+- **YELLOW** — `5% ≤ |delta_pct| < 10%` : *monitor — within model
   uncertainty*.
-- **RED** — `|delta_pct| ≥ 15%` : *significant gap — investigate
+- **RED** — `|delta_pct| ≥ 10%` : *significant gap — investigate
   site-level factors*.
 
 Ces seuils sont **commentary-grade**, pas regulatory : ils visent à
