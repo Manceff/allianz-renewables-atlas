@@ -118,9 +118,19 @@ def _process_park(
                     json.dumps(production, indent=2, ensure_ascii=False),
                     encoding="utf-8",
                 )
+                # Sidecar dédié au breakdown mensuel — consommé par la page Monograph (T10).
+                (park_dir / "pvgis_monthly.json").write_text(
+                    json.dumps(
+                        {"monthly_production_kwh": production["monthly_production_kwh"]},
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
                 estimated_mwh = float(production["annual_total_mwh"])
                 logger.info(
-                    "  ✓ production_estimated.json (%.0f MWh/an)", estimated_mwh
+                    "  ✓ production_estimated.json + pvgis_monthly.json (%.0f MWh/an)",
+                    estimated_mwh,
                 )
             except (PvgisFetchError, ValueError) as e:
                 logger.warning("  ⚠ PVGIS: %s", e)
