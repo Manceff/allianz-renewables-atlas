@@ -19,3 +19,13 @@ venv/
 
 # Tests
 .pytest_cache/
+
+# Agent runtime logs (gardés en local, pas commit)
+.agent/run-*.log
+.agent/phase*.log
+.agent/resume-*.log
+.gitnexus
+
+# Claude Code local config (settings.local.json + cached skills)
+.claude/settings.local.json
+.claude/skills/
