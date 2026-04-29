@@ -1,0 +1,113 @@
+{
+  "entries": [
+    {
+      "park_id": "ourika",
+      "capacity_mwp": 46.0,
+      "confidence_interval": {
+        "low_mwh": 70075.37015,
+        "mid_mwh": 73493.68089,
+        "high_mwh": 76911.99162,
+        "scenarios": [
+          {
+            "loss_pct": 10.0,
+            "annual_kwh": 76911991.62
+          },
+          {
+            "loss_pct": 14.0,
+            "annual_kwh": 73493680.89
+          },
+          {
+            "loss_pct": 18.0,
+            "annual_kwh": 70075370.15
+          }
+        ]
+      },
+      "reported_mwh": 80000.0,
+      "delta_pct": -8.132898887499994,
+      "severity": "yellow",
+      "source_url": "https://www.allianzcapitalpartners.com/media/news/102518-allianz-acquires-first-subsidy-free-solar-project-iberia/"
+    },
+    {
+      "park_id": "solara-4",
+      "capacity_mwp": 219.0,
+      "confidence_interval": {
+        "low_mwh": 336201.90191,
+        "mid_mwh": 352601.99469,
+        "high_mwh": 369002.08747,
+        "scenarios": [
+          {
+            "loss_pct": 10.0,
+            "annual_kwh": 369002087.47
+          },
+          {
+            "loss_pct": 14.0,
+            "annual_kwh": 352601994.69
+          },
+          {
+            "loss_pct": 18.0,
+            "annual_kwh": 336201901.91
+          }
+        ]
+      },
+      "reported_mwh": 380000.0,
+      "delta_pct": -7.210001397368416,
+      "severity": "yellow",
+      "source_url": "https://www.power-technology.com/data-insights/power-plant-profile-solara-4-vaqueiros-solar-pv-park-portugal/"
+    },
+    {
+      "park_id": "grenergy-spain-300",
+      "capacity_mwp": 300.0,
+      "confidence_interval": {
+        "low_mwh": 463694.69365,
+        "mid_mwh": 486313.947,
+        "high_mwh": 508933.20035,
+        "scenarios": [
+          {
+            "loss_pct": 10.0,
+            "annual_kwh": 508933200.35
+          },
+          {
+            "loss_pct": 14.0,
+            "annual_kwh": 486313947.0
+          },
+          {
+            "loss_pct": 18.0,
+            "annual_kwh": 463694693.65
+          }
+        ]
+      },
+      "reported_mwh": 557100.0,
+      "delta_pct": -12.706166397415188,
+      "severity": "red",
+      "source_url": "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
+    },
+    {
+      "park_id": "manzano-solar",
+      "capacity_mwp": 11.2,
+      "confidence_interval": {
+        "low_mwh": 14172.21226,
+        "mid_mwh": 14863.53969,
+        "high_mwh": 15554.867119999999,
+        "scenarios": [
+          {
+            "loss_pct": 10.0,
+            "annual_kwh": 15554867.12
+          },
+          {
+            "loss_pct": 14.0,
+            "annual_kwh": 14863539.69
+          },
+          {
+            "loss_pct": 18.0,
+            "annual_kwh": 14172212.26
+          }
+        ]
+      },
+      "reported_mwh": 13125.0,
+      "delta_pct": 13.246016685714283,
+      "severity": "red",
+      "source_url": "https://www.pv-tech.org/ibc_solar_sells_11-2mw_italian_park_to_allianz_specialised_investments/"
+    }
+  ],
+  "generated_at": "2026-04-29T19:02:38.397565Z"
+}

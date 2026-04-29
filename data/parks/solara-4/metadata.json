@@ -4,8 +4,8 @@
   "country": "PT",
   "technology": "solar",
   "coordinates": [
-    37.95,
-    -8.87
+    37.3468,
+    -7.6956
   ],
   "capacity_mwp": 219,
   "commissioning_year": 2019,
@@ -13,7 +13,7 @@
   "allianz_stake_pct": 100,
   "acquisition_year": 2018,
   "press_release_url": "https://www.allianzcapitalpartners.com/media/news/121818-allianz-acquire-largest-subsidy-free-solar-project-portugal/",
-  "notes": "Plus grand parc subsidy-free du Portugal au moment de l'acquisition",
+  "notes": "Plus grand parc subsidy-free du Portugal au moment de l'acquisition. Renommé Riccardo Totta PV Plant à l'inauguration. 661 500 panneaux sur 320 ha aux paroisses de Vaqueiros et Martim Longo (Alcoutim).",
   "has_pvgis_estimate": true,
   "has_reported_production": false
 }

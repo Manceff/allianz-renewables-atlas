@@ -13,7 +13,8 @@
   "allianz_stake_pct": null,
   "acquisition_year": 2010,
   "press_release_url": "à rechercher dans archives Allianz 2010",
-  "notes": "Premier investissement solaire d'Allianz Specialised Investments en 2010",
+  "notes": "Premier investissement solaire d'Allianz Specialised Investments en 2010. Capacité non confirmée par source publique : exclu du portfolio sweep (PVGIS).",
   "has_pvgis_estimate": true,
-  "has_reported_production": false
+  "has_reported_production": false,
+  "excluded_from_sweep": true
 }
