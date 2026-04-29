@@ -40,14 +40,14 @@ parks:
     name: "Solara 4"
     country: PT
     technology: solar
-    coordinates: [37.95, -8.87]  # Sines, Portugal — à raffiner
+    coordinates: [37.3468, -7.6956]  # Vaqueiros, Alcoutim, Algarve. Source : https://www.power-technology.com/data-insights/power-plant-profile-solara-4-vaqueiros-solar-pv-park-portugal/
     capacity_mwp: 219
     commissioning_year: 2019
     operator: "WElink + China Triumph International Engineering"
     allianz_stake_pct: 100
     acquisition_year: 2018
     press_release_url: "https://www.allianzcapitalpartners.com/media/news/121818-allianz-acquire-largest-subsidy-free-solar-project-portugal/"
-    notes: "Plus grand parc subsidy-free du Portugal au moment de l'acquisition"
+    notes: "Plus grand parc subsidy-free du Portugal au moment de l'acquisition. Renommé Riccardo Totta PV Plant à l'inauguration. 661 500 panneaux sur 320 ha aux paroisses de Vaqueiros et Martim Longo (Alcoutim)."
     has_pvgis_estimate: true
     has_reported_production: false  # à vérifier
 
@@ -71,15 +71,16 @@ parks:
     country: IT
     technology: solar
     coordinates: [40.63, 17.94]  # Brindisi, Apulia — à raffiner
-    capacity_mwp: null  # à rechercher
+    capacity_mwp: null  # capacité non sourcée publiquement (cf. data/UNCERTAIN.md)
     commissioning_year: 2010
     operator: "à rechercher"
     allianz_stake_pct: null
     acquisition_year: 2010
     press_release_url: "à rechercher dans archives Allianz 2010"
-    notes: "Premier investissement solaire d'Allianz Specialised Investments en 2010"
+    notes: "Premier investissement solaire d'Allianz Specialised Investments en 2010. Capacité non confirmée par source publique : exclu du portfolio sweep (PVGIS)."
     has_pvgis_estimate: true
     has_reported_production: false
+    excluded_from_sweep: true
 
   - id: manzano-solar
     name: "Manzano Solar Park"

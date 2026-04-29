@@ -9,6 +9,9 @@
 
 ## Période 2010-2017
 
+- **Brindisi Solar (entrée `brindisi` dans `parks_index.yaml`)** — IT, 2010. Mentionné par Allianz comme "premier investissement solaire d'Allianz Specialised Investments en 2010" mais aucune source publique ne confirme la capacité (MWp), l'opérateur, ni les coordonnées exactes du site. Le seul deal italien proche dans le temps publiquement documenté est l'achat à BP Solar Italy de six centrales de 1 MWp en mai 2010 (6 MW total, sites non nommés). Le parc Torre Santa Susanna 7,56 MW (Brindisi province, COD avr 2011) liste un "investisseur non disclosé" sans confirmer Allianz. Conséquence : `capacity_mwp: null` + `excluded_from_sweep: true` dans le YAML — le parc reste sur le globe pour transparence du périmètre 2010 mais est exclu du sweep PVGIS tant qu'une source primaire ne confirme pas la capacité.
+  - Sources : <https://renewablesnow.com/news/allianz-snaps-6-mw-pv-assets-from-bp-solar-67079/>, <https://www.power-technology.com/projects/torre-santa-susanna-solar-park/>, <https://www.allianz.com/content/dam/onemarketing/azcom/Allianz_com/migration/media/press/document/other/factsheet_asi_21012011_en.pdf>
+
 - **ImWind Austrian Portfolio (Scharndorf III, Zistersdorf Ost, Ladendorf, Großkrut-Hauskirchen-Wilfersdorf)** — AT, ~2015. 4 parcs éoliens, 21 turbines, 65 MW total, tous dans un rayon de 70 km de Vienne ; premier deal autrichien ACP (closing fév 2015). Coords disponibles pour Scharndorf I/II/West mais pas confirmées pour Scharndorf III ; les 3 autres sites non géoréférencés. À introduire en portfolio entry similaire à `france-2013-portfolio` une fois sites individuels géocodés.
   - Sources : <https://mergr.com/transaction/allianz-capital-partners-acquires-imwind-group-four-austrian-wind-projects>, <https://renewablesnow.com/news/allianz-to-acquire-65-mw-of-wind-capacity-in-austria-483237/>
 
