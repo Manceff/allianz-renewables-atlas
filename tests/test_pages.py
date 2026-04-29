@@ -53,3 +53,10 @@ def test_globe_renders_severity_mode():
     if radios:
         radios[0].set_value("Delta severity").run()
     assert not at.exception
+
+
+def test_ic_snapshot_page_renders():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("src/pages/4_📈_IC_Snapshot.py").run(timeout=20)
+    assert not at.exception
