@@ -10,6 +10,13 @@ def test_methodology_page_renders():
     assert not at.exception
 
 
+def test_portfolio_sweep_page_renders():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("src/pages/2_📊_Portfolio_Sweep.py").run()
+    assert not at.exception
+
+
 def test_ourika_monograph_renders(monkeypatch):
     """Smoke test page Monograph. Stub PVGIS pour éviter le hit réseau."""
     from src.lib import confidence_interval as ci_mod
