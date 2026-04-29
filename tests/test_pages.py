@@ -36,3 +36,20 @@ def test_ourika_monograph_renders(monkeypatch):
 
     at = AppTest.from_file("src/pages/3_🔬_Ourika_Monograph.py").run(timeout=30)
     assert not at.exception
+
+
+def test_globe_renders_default():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("src/pages/1_🌍_Globe.py").run()
+    assert not at.exception
+
+
+def test_globe_renders_severity_mode():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("src/pages/1_🌍_Globe.py").run()
+    radios = at.radio
+    if radios:
+        radios[0].set_value("Delta severity").run()
+    assert not at.exception

@@ -8,12 +8,17 @@ Voir CLAUDE.md pour les conventions et README pour la vision.
 
 from __future__ import annotations
 
+import json
+import logging
+
 import streamlit as st
 import yaml
 from pathlib import Path
 
 import pydeck as pdk
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 st.set_page_config(page_title="Globe — Allianz Renewables Atlas", page_icon="🌍", layout="wide")
 
@@ -25,6 +30,34 @@ st.caption(
 
 # ---- Chargement des parcs depuis parks_index.yaml ----
 PARKS_INDEX = Path(__file__).resolve().parent.parent.parent / "data" / "parks_index.yaml"
+PORTFOLIO_SWEEP = Path(__file__).resolve().parent.parent.parent / "data" / "portfolio_sweep.json"
+
+# Couleurs sévérité delta (green/yellow/red), grey si pas d'entrée dans portfolio_sweep.json
+SEVERITY_COLORS = {
+    "green": [34, 197, 94, 200],
+    "yellow": [234, 179, 8, 200],
+    "red": [239, 68, 68, 200],
+}
+DEFAULT_SEVERITY_COLOR = [180, 180, 180, 200]
+
+
+@st.cache_data
+def load_severity_map() -> dict[str, str]:
+    """Charge `data/portfolio_sweep.json` et retourne {park_id: severity}.
+
+    En cas de fichier absent ou JSON malformé, retourne un dict vide
+    (fallback grey appliqué côté coloration).
+    """
+    if not PORTFOLIO_SWEEP.exists():
+        return {}
+    try:
+        with open(PORTFOLIO_SWEEP) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("portfolio_sweep.json illisible: %s", exc)
+        return {}
+    entries = data.get("entries", []) if isinstance(data, dict) else []
+    return {e.get("park_id"): e.get("severity") for e in entries if e.get("park_id")}
 
 
 @st.cache_data
@@ -69,6 +102,12 @@ min_capacity = st.sidebar.slider(
     step=10,
 )
 
+color_mode = st.sidebar.radio(
+    "Color markers by",
+    ["Technology", "Delta severity"],
+    index=0,
+)
+
 # ---- Application des filtres ----
 filtered = df[
     (df["country"].isin(selected_countries))
@@ -98,9 +137,15 @@ TECHNOLOGY_COLORS = {
 
 filtered_df = filtered.copy()
 # .apply() au lieu de .map().fillna([liste]) — pandas refuse une liste comme valeur de fillna
-filtered_df["color"] = filtered_df["technology"].apply(
-    lambda t: TECHNOLOGY_COLORS.get(t, [128, 128, 128, 200])
-)
+if color_mode == "Delta severity":
+    severity_map = load_severity_map()
+    filtered_df["color"] = filtered_df["id"].apply(
+        lambda pid: SEVERITY_COLORS.get(severity_map.get(pid), DEFAULT_SEVERITY_COLOR)
+    )
+else:
+    filtered_df["color"] = filtered_df["technology"].apply(
+        lambda t: TECHNOLOGY_COLORS.get(t, [128, 128, 128, 200])
+    )
 filtered_df["height"] = filtered_df["capacity_mwp"].fillna(50) * 1000  # exagération visuelle pour 3D
 
 # ScatterplotLayer pour les markers de base
