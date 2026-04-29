@@ -146,7 +146,21 @@ else:
     filtered_df["color"] = filtered_df["technology"].apply(
         lambda t: TECHNOLOGY_COLORS.get(t, [128, 128, 128, 200])
     )
-filtered_df["height"] = filtered_df["capacity_mwp"].fillna(50) * 1000  # exagération visuelle pour 3D
+filtered_df["height"] = filtered_df["capacity_mwp"].fillna(50)  # MW (échelle ajustée par elevation_scale)
+
+# Couche océan (sphère bleue) + continents — rend la terre visible sur _GlobeView
+COUNTRIES_GEOJSON = "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"
+
+countries_layer = pdk.Layer(
+    "GeoJsonLayer",
+    id="base-countries",
+    data=COUNTRIES_GEOJSON,
+    stroked=True,
+    filled=True,
+    get_fill_color=[60, 80, 100, 200],
+    get_line_color=[120, 140, 160, 220],
+    line_width_min_pixels=1,
+)
 
 # ScatterplotLayer pour les markers de base
 scatter_layer = pdk.Layer(
@@ -169,14 +183,14 @@ column_layer = pdk.Layer(
     radius=20000,
     pickable=True,
     auto_highlight=True,
-    elevation_scale=10,
+    elevation_scale=2000,  # 1 MW → 2 km de haut, 300 MW → 600 km (visible mais pas démesuré)
 )
 
-# View state initial : centré Europe, globe 3D rotatif
+# View state initial : centré globe, zoom faible pour voir la sphère entière
 view_state = pdk.ViewState(
     longitude=10,
-    latitude=48,
-    zoom=1.2,
+    latitude=30,
+    zoom=0.3,
     pitch=0,
     bearing=0,
 )
@@ -194,11 +208,11 @@ tooltip = {
 }
 
 deck = pdk.Deck(
-    layers=[column_layer, scatter_layer],
+    layers=[countries_layer, column_layer, scatter_layer],
     initial_view_state=view_state,
     views=[globe_view],
     tooltip=tooltip,
-    map_provider=None,  # _GlobeView n'utilise pas de basemap classique
+    map_provider=None,  # _GlobeView n'utilise pas de basemap classique — countries_layer fait office de continents
     parameters={"cull": True},
 )
 
