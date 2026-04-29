@@ -54,6 +54,7 @@ class ParkModel(BaseModel):
     notes: str | None = None
     has_pvgis_estimate: bool = False
     has_reported_production: bool = False
+    excluded_from_sweep: bool = False
 
     @field_validator("coordinates", mode="before")
     @classmethod
