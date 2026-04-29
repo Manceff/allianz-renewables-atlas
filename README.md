@@ -35,6 +35,24 @@ L'honnêteté du périmètre est elle-même un atout — l'analyste apprécie la
 
 **Couverture analytique variable selon le type d'infrastructure**. Pour les parcs solaires (~5-7 sur 23) : pipeline analytique complet (Sentinel-2 + PVGIS PVcalc + comparaison à production publiée). Pour les parcs éoliens (~13-18 sur 23) : monitoring visuel (image satellite + métadonnées). La méthodologie distingue clairement les deux niveaux.
 
+## Live demo
+
+Streamlit Cloud : https://allianz-renewables-atlas.streamlit.app/
+
+## Pages
+
+L'app Streamlit comporte 7 pages multi-onglets :
+
+| Page | Description |
+|------|-------------|
+| 🌍 **Globe** | Globe 3D interactif des 23 parcs Renewables ACP cartographiés, avec toggle de coloration par sévérité du delta. |
+| 📊 **Portfolio Sweep** | Production estimée vs publiée pour les 4 parcs solaires couverts, avec intervalle de confiance PVGIS. |
+| 🔬 **Ourika Monograph** | Deep-dive sur le parc solaire portugais Ourika (46 MWp) : breakdown mensuel, sensibilité aux pertes, contexte projet. |
+| 📈 **IC Snapshot** | Vue 30-secondes pour Investment Committee : 4 KPI portefeuille + top deltas. |
+| 📐 **Methodology** | Sources, formules PVGIS, hypothèses, limites — méthodologie cliquable depuis l'app. |
+| 📍 **Spotlight** | Vue détaillée d'un parc (image satellite, métadonnées, charts production pour les solaires). |
+| ℹ️ **About** | Contexte projet, disclaimers, contact. |
+
 ## Architecture du projet
 
 ### Pages Streamlit

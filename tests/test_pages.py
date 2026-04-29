@@ -67,3 +67,24 @@ def test_ic_snapshot_page_renders():
 
     at = AppTest.from_file("src/pages/4_📈_IC_Snapshot.py").run(timeout=20)
     assert not at.exception
+
+
+def test_about_page_renders():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("src/pages/7_ℹ️_About.py").run()
+    assert not at.exception
+
+
+def test_spotlight_page_renders():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("src/pages/6_📍_Spotlight.py").run()
+    assert not at.exception
+
+
+def test_app_entry_renders():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("src/app.py").run()
+    assert not at.exception
