@@ -1,7 +1,8 @@
 """Page Globe — terre 3D interactive avec markers pour chaque parc Allianz Renewables.
 
-Stack : PyDeck _GlobeView avec ScatterplotLayer (markers) + ColumnLayer (hauteur capacité).
-Click sur un marker → navigation vers la page Spotlight (via st.session_state).
+Stack : Plotly scatter_geo en projection orthographic (vraie sphère 3D rotative,
+fiable cross-browser, vs PyDeck _GlobeView qui dégrade en MapView Mercator dans
+Streamlit 1.56). Filtres pays/techno/capacité + toggle couleur tech/severity.
 
 Voir CLAUDE.md pour les conventions et README pour la vision.
 """
@@ -15,8 +16,8 @@ import streamlit as st
 import yaml
 from pathlib import Path
 
-import pydeck as pdk
 import pandas as pd
+import plotly.express as px
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ st.set_page_config(page_title="Globe — Allianz Renewables Atlas", page_icon="�
 st.title("🌍 Globe interactif")
 st.caption(
     "Terre 3D rotative avec les 23 parcs Renewables d'Allianz Capital Partners cartographiés. "
-    "Hauteur proportionnelle à la capacité installée. Couleur par technologie."
+    "Click + drag pour faire tourner. Couleur par technologie ou par sévérité du delta."
 )
 
 # ---- Chargement des parcs depuis parks_index.yaml ----
@@ -34,19 +35,26 @@ PORTFOLIO_SWEEP = Path(__file__).resolve().parent.parent.parent / "data" / "port
 
 # Couleurs sévérité delta (green/yellow/red), grey si pas d'entrée dans portfolio_sweep.json
 SEVERITY_COLORS = {
-    "green": [34, 197, 94, 200],
-    "yellow": [234, 179, 8, 200],
-    "red": [239, 68, 68, 200],
+    "green": "#22c55e",
+    "yellow": "#eab308",
+    "red": "#ef4444",
+    "none": "#b4b4b4",
 }
-DEFAULT_SEVERITY_COLOR = [180, 180, 180, 200]
+
+# Couleurs par technologie (cohérentes avec IC Snapshot et la légende)
+TECHNOLOGY_COLORS = {
+    "solar": "#fbbf24",          # jaune
+    "onshore_wind": "#22c55e",   # vert
+    "offshore_wind": "#3b82f6",  # bleu
+    "battery_storage": "#a855f7",  # violet
+}
 
 
 @st.cache_data
 def load_severity_map() -> dict[str, str]:
-    """Charge `data/portfolio_sweep.json` et retourne {park_id: severity}.
+    """Charge `data/portfolio_sweep.json` → {park_id: severity}.
 
-    En cas de fichier absent ou JSON malformé, retourne un dict vide
-    (fallback grey appliqué côté coloration).
+    Fichier absent ou JSON malformé → dict vide (fallback "none" côté coloration).
     """
     if not PORTFOLIO_SWEEP.exists():
         return {}
@@ -71,7 +79,6 @@ def load_parks() -> pd.DataFrame:
     df = pd.DataFrame(parks)
     if df.empty:
         return df
-    # Extract lat/lon depuis coordinates [lat, lon]
     df["lat"] = df["coordinates"].apply(lambda c: c[0] if c else None)
     df["lon"] = df["coordinates"].apply(lambda c: c[1] if c else None)
     return df
@@ -113,120 +120,98 @@ filtered = df[
     (df["country"].isin(selected_countries))
     & (df["technology"].isin(selected_technologies))
     & ((df["capacity_mwp"].fillna(0) >= min_capacity))
-]
+].copy()
 
 # ---- Stats agrégées ----
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Parcs filtrés", len(filtered))
 col2.metric(
     "Capacité totale",
-    f"{filtered['capacity_mwp'].sum():.0f} MW" if filtered["capacity_mwp"].notna().any() else "n/c",
+    f"{filtered['capacity_mwp'].sum():,.0f} MW" if filtered["capacity_mwp"].notna().any() else "n/c",
 )
 col3.metric("Pays couverts", len(filtered["country"].unique()))
 col4.metric("Sur 150+ ACP", f"{len(filtered)} / 150+")
 
 st.divider()
 
-# ---- PyDeck Globe ----
-TECHNOLOGY_COLORS = {
-    "solar": [251, 191, 36, 200],  # jaune
-    "onshore_wind": [34, 197, 94, 200],  # vert
-    "offshore_wind": [59, 130, 246, 200],  # bleu
-    "battery_storage": [168, 85, 247, 200],  # violet
-}
-
-filtered_df = filtered.copy()
-# .apply() au lieu de .map().fillna([liste]) — pandas refuse une liste comme valeur de fillna
+# ---- Plotly scatter_geo orthographic (vrai globe sphérique) ----
+# Color column selon le mode choisi
 if color_mode == "Delta severity":
     severity_map = load_severity_map()
-    filtered_df["color"] = filtered_df["id"].apply(
-        lambda pid: SEVERITY_COLORS.get(severity_map.get(pid), DEFAULT_SEVERITY_COLOR)
-    )
+    filtered["severity"] = filtered["id"].map(severity_map).fillna("none")
+    color_col = "severity"
+    color_map = SEVERITY_COLORS
 else:
-    filtered_df["color"] = filtered_df["technology"].apply(
-        lambda t: TECHNOLOGY_COLORS.get(t, [128, 128, 128, 200])
-    )
-filtered_df["height"] = filtered_df["capacity_mwp"].fillna(50)  # MW (échelle ajustée par elevation_scale)
+    color_col = "technology"
+    color_map = TECHNOLOGY_COLORS
 
-# Couche océan (sphère bleue) + continents — rend la terre visible sur _GlobeView
-COUNTRIES_GEOJSON = "https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"
+# Taille proportionnelle à la capacité, plafonnée pour lisibilité
+filtered["marker_size"] = filtered["capacity_mwp"].fillna(20).clip(lower=15, upper=80)
 
-countries_layer = pdk.Layer(
-    "GeoJsonLayer",
-    id="base-countries",
-    data=COUNTRIES_GEOJSON,
-    stroked=True,
-    filled=True,
-    get_fill_color=[60, 80, 100, 200],
-    get_line_color=[120, 140, 160, 220],
-    line_width_min_pixels=1,
+fig = px.scatter_geo(
+    filtered,
+    lat="lat",
+    lon="lon",
+    size="marker_size",
+    color=color_col,
+    color_discrete_map=color_map,
+    hover_name="name",
+    hover_data={
+        "country": True,
+        "technology": True,
+        "capacity_mwp": ":,.0f",
+        "operator": True,
+        "commissioning_year": True,
+        "lat": False,
+        "lon": False,
+        "marker_size": False,
+        color_col: True,
+    },
+    projection="orthographic",
 )
 
-# ScatterplotLayer pour les markers de base
-scatter_layer = pdk.Layer(
-    "ScatterplotLayer",
-    data=filtered_df,
-    get_position=["lon", "lat"],
-    get_color="color",
-    get_radius=30000,  # rayon en mètres
-    pickable=True,
-    auto_highlight=True,
+fig.update_geos(
+    showland=True,
+    landcolor="#dbeafe",
+    showocean=True,
+    oceancolor="#1e3a8a",
+    showcountries=True,
+    countrycolor="#64748b",
+    showcoastlines=True,
+    coastlinecolor="#475569",
+    showframe=True,
+    framecolor="#94a3b8",
+    bgcolor="rgba(0,0,0,0)",
+    center=dict(lat=30, lon=10),
+    projection_rotation=dict(lon=10, lat=30, roll=0),
 )
 
-# ColumnLayer pour la hauteur 3D (capacité)
-column_layer = pdk.Layer(
-    "ColumnLayer",
-    data=filtered_df,
-    get_position=["lon", "lat"],
-    get_elevation="height",
-    get_fill_color="color",
-    radius=20000,
-    pickable=True,
-    auto_highlight=True,
-    elevation_scale=2000,  # 1 MW → 2 km de haut, 300 MW → 600 km (visible mais pas démesuré)
+fig.update_layout(
+    height=600,
+    margin=dict(l=0, r=0, t=0, b=0),
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=-0.05,
+        xanchor="center",
+        x=0.5,
+    ),
 )
 
-# View state initial : centré globe, zoom faible pour voir la sphère entière
-view_state = pdk.ViewState(
-    longitude=10,
-    latitude=30,
-    zoom=0.3,
-    pitch=0,
-    bearing=0,
-)
+# Markers : bordure sombre pour la lisibilité
+fig.update_traces(marker=dict(line=dict(width=1, color="#1f2937")))
 
-# _GlobeView pour rendu globe 3D (vs Mercator plat). Expérimental PyDeck mais marche.
-globe_view = pdk.View(type="_GlobeView", controller=True)
-
-# Tooltip au hover
-tooltip = {
-    "html": "<b>{name}</b><br/>"
-    "{country} • {technology}<br/>"
-    "{capacity_mwp} MW • {commissioning_year}<br/>"
-    "Opérateur : {operator}",
-    "style": {"backgroundColor": "#003781", "color": "white", "fontSize": "12px"},
-}
-
-deck = pdk.Deck(
-    layers=[countries_layer, column_layer, scatter_layer],
-    initial_view_state=view_state,
-    views=[globe_view],
-    tooltip=tooltip,
-    map_provider=None,  # _GlobeView n'utilise pas de basemap classique — countries_layer fait office de continents
-    parameters={"cull": True},
-)
-
-st.pydeck_chart(deck, width="stretch")
+st.plotly_chart(fig, width="stretch", config={"scrollZoom": True})
 
 st.caption(
-    "💡 Survole un marker pour les détails. Click + drag pour faire tourner. "
-    "Pour ouvrir la page détaillée d'un parc, va dans **Spotlight** dans la sidebar et sélectionne le parc."
+    "💡 Drag pour faire tourner le globe. Hover sur un marker pour les détails. "
+    "Pour la page détaillée d'un parc, va dans **Spotlight** dans la sidebar."
 )
 
 st.divider()
 
 # ---- Légende ----
-st.subheader("Légende")
+st.subheader("Légende — Technologies")
 leg_col1, leg_col2, leg_col3, leg_col4 = st.columns(4)
 leg_col1.markdown("🟡 **Solaire PV**")
 leg_col2.markdown("🟢 **Onshore wind**")
