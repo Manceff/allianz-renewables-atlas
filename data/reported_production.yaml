@@ -1,0 +1,35 @@
+# Production annuelle publiquement reportée pour les parcs solaires ACP.
+# Sources : press releases opérateurs / Allianz uniquement. Pas de scraping live.
+# Si une entrée n'a pas de source publique vérifiable, elle n'est PAS ajoutée
+# (mieux vaut 4 entrées vérifiées que 7 inventées).
+#
+# Schéma par entrée :
+#   park_id : doit matcher un id de data/parks_index.yaml
+#   annual_mwh : production annuelle reportée (MWh)
+#   year : année de référence du chiffre (commissioning ou rapport)
+#   source_url : URL canonique citable
+#   note : précisions (méthode de conversion, partenaire, etc.)
+
+- park_id: ourika
+  annual_mwh: 80000
+  year: 2018
+  source_url: "https://www.allianzcapitalpartners.com/media/news/102518-allianz-acquires-first-subsidy-free-solar-project-iberia/"
+  note: "Allianz PR + WElink PR mentionnent 23 000 foyers. 80 GWh/an cités explicitement par algarvedailynews.com 2018 (https://algarvedailynews.com/news/14745-boost-doubles-portugal-s-solar-production-capacity). Cohérent avec 23 000 foyers x ~3.5 MWh."
+
+- park_id: solara-4
+  annual_mwh: 380000
+  year: 2021
+  source_url: "https://www.power-technology.com/data-insights/power-plant-profile-solara-4-vaqueiros-solar-pv-park-portugal/"
+  note: "COD septembre 2021. 380 000 MWh/an cités par power-technology data insights ; ~382 GWh/an confirmes par GEM Wiki (Riccardo_Totta_Solar_Plant). Plant renommee Riccardo Totta apres inauguration."
+
+- park_id: manzano-solar
+  annual_mwh: 13125
+  year: 2011
+  source_url: "https://www.pv-tech.org/ibc_solar_sells_11-2mw_italian_park_to_allianz_specialised_investments/"
+  note: "PV-Tech rapporte 3 750 foyers alimentes (cite IBC Solar). Conversion 3 750 x 3.5 MWh/foyer (moyenne EU) = 13 125 MWh/an. Pas de chiffre GWh explicite dans la source primaire."
+
+- park_id: grenergy-spain-300
+  annual_mwh: 557100
+  year: 2025
+  source_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
+  note: "Portefeuille = Tabernas (250 MW, 466.6 GWh/an) + Jose Cabrera (47 MW, 90.5 GWh/an) = 297 MW total, 557.1 GWh/an. Production individuelle confirmee par lacerca.com (https://www.lacerca.com/noticias/guadalajara/grenergy-venta-plantas-mw-millones-euros-plusvalias-75-788573-1.html). Closing nov 2025."
