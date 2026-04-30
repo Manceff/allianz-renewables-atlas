@@ -1,9 +1,9 @@
 """Allianz Renewables Atlas — single-page entry point.
 
-Globe terrestre orthographique sur fond starfield, click natif sur un marker
-ouvre une analyse fine pour un analyste private equity.
+Vraie photo Earth depuis l'espace (globe.gl + NASA Blue Marble) en iframe,
+sélection par dropdown, panel avec vue satellite Esri zoom et analyse PVGIS.
 
-Style : dark space, vibe ISS / Tesla console — pas d'emojis, pas de gimmick.
+Style : sober, sans emoji, design analyste private equity.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ if str(_ROOT) not in sys.path:
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src.lib.parks_loader import load_parks_index
 from src.lib.pvgis_fetch import fetch_pvgis_hourly
@@ -49,13 +50,6 @@ if CSS_PATH.exists():
     st.markdown(f"<style>{CSS_PATH.read_text()}</style>", unsafe_allow_html=True)
 
 PORTFOLIO_SWEEP_PATH = _ROOT / "data" / "portfolio_sweep.json"
-
-SEVERITY_COLORS = {
-    "green": "#10b981",
-    "yellow": "#facc15",
-    "red": "#f87171",
-    "none": "#475569",
-}
 
 SEVERITY_LABELS = {
     "green": "ALIGNED",
@@ -94,19 +88,6 @@ def _load_parks_df() -> pd.DataFrame:
 
 
 @st.cache_data
-def _load_severity_map() -> dict[str, str]:
-    if not PORTFOLIO_SWEEP_PATH.exists():
-        return {}
-    try:
-        with open(PORTFOLIO_SWEEP_PATH) as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return {}
-    entries = data.get("entries", []) if isinstance(data, dict) else []
-    return {e.get("park_id"): e.get("severity") for e in entries if e.get("park_id")}
-
-
-@st.cache_data
 def _load_reported() -> dict[str, dict]:
     rep = load_reported_production()
     return {pid: r.model_dump(mode="json") for pid, r in rep.items()}
@@ -118,16 +99,172 @@ def _fetch_hourly_cached(park_id: str, lat: float, lon: float, peakpower_mw: flo
 
 
 # ---------------------------------------------------------------------------
+# Globe.gl HTML — real NASA Blue Marble texture, atmospheric glow, auto-rotate
+# ---------------------------------------------------------------------------
+
+
+def _build_globe_html(parks: pd.DataFrame, height: int = 600) -> str:
+    """Renvoie le HTML autonome du globe Three.js avec textures NASA."""
+    points = [
+        {
+            "name": row["name"],
+            "country": row["country"],
+            "cap": float(row["capacity_mwp"]),
+            "lat": float(row["lat"]),
+            "lng": float(row["lon"]),
+        }
+        for _, row in parks.iterrows()
+    ]
+    points_json = json.dumps(points)
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body {{ margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }}
+  #globeViz {{ width: 100%; height: 100%; cursor: grab; }}
+  #globeViz:active {{ cursor: grabbing; }}
+  .label-card {{
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(8px);
+    color: #f1f5f9;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(125, 211, 252, 0.4);
+    font-family: -apple-system, "Inter", system-ui, sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.01em;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    white-space: nowrap;
+  }}
+  .label-card .lbl-name {{ font-weight: 600; color: #f1f5f9; margin-bottom: 2px; }}
+  .label-card .lbl-meta {{ color: #94a3b8; font-size: 11px; }}
+</style>
+</head>
+<body>
+<div id="globeViz"></div>
+<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+<script src="https://unpkg.com/globe.gl@2.27.4/dist/globe.gl.min.js"></script>
+<script>
+  const POINTS = {points_json};
+  const elem = document.getElementById('globeViz');
+
+  const globe = Globe()
+    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+    .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+    .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
+    .atmosphereColor('#7dd3fc')
+    .atmosphereAltitude(0.20)
+    .pointsData(POINTS)
+    .pointLat('lat')
+    .pointLng('lng')
+    .pointColor(() => '#7dd3fc')
+    .pointAltitude(0.012)
+    .pointRadius(0.32)
+    .pointLabel(d => `
+      <div class="label-card">
+        <div class="lbl-name">${{d.name}}</div>
+        <div class="lbl-meta">${{d.country}} · ${{d.cap.toFixed(1)}} MWp</div>
+      </div>
+    `)
+    .pointsMerge(true);
+
+  globe(elem);
+
+  // Initial framing — Europe-centric
+  globe.pointOfView({{ lat: 38, lng: 4, altitude: 2.4 }}, 0);
+
+  // Smooth auto-rotation
+  globe.controls().autoRotate = true;
+  globe.controls().autoRotateSpeed = 0.35;
+  globe.controls().enableZoom = true;
+  globe.controls().minDistance = 200;
+  globe.controls().maxDistance = 800;
+
+  // Resize handling
+  function fit() {{
+    globe.width(elem.clientWidth);
+    globe.height(elem.clientHeight);
+  }}
+  fit();
+  window.addEventListener('resize', fit);
+</script>
+</body>
+</html>
+"""
+
+
+# ---------------------------------------------------------------------------
+# Satellite view HTML — Leaflet + Esri World Imagery (free, no auth)
+# ---------------------------------------------------------------------------
+
+
+def _build_satellite_html(lat: float, lon: float, label: str, height: int = 280) -> str:
+    """Vue satellite zoomée sur la zone du parc, via Esri World Imagery (gratuit)."""
+    label_safe = label.replace("'", "&#39;").replace('"', "&quot;")
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body {{ margin: 0; padding: 0; height: 100%; background: #0a0e1a; }}
+  #map {{ width: 100%; height: 100%; border-radius: 8px; }}
+  .leaflet-control-attribution {{ font-size: 9px !important; opacity: 0.6; }}
+  .leaflet-control-zoom a {{
+    background: rgba(20, 27, 46, 0.85) !important;
+    color: #cbd5e1 !important;
+    border: 1px solid rgba(125, 211, 252, 0.2) !important;
+  }}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map', {{ zoomControl: true, attributionControl: true }})
+    .setView([{lat}, {lon}], 13);
+
+  L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
+    {{ maxZoom: 18, attribution: 'Esri, Maxar, Earthstar Geographics' }}
+  ).addTo(map);
+
+  // Park location ring marker
+  L.circleMarker([{lat}, {lon}], {{
+    radius: 12,
+    color: '#7dd3fc',
+    weight: 2,
+    fillColor: '#7dd3fc',
+    fillOpacity: 0.15,
+  }}).addTo(map).bindPopup('{label_safe}');
+  L.circleMarker([{lat}, {lon}], {{
+    radius: 4,
+    color: '#7dd3fc',
+    weight: 2,
+    fillColor: '#7dd3fc',
+    fillOpacity: 0.9,
+  }}).addTo(map);
+</script>
+</body>
+</html>
+"""
+
+
+# ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
 
 st.markdown(
     """
-    <div style="text-align: center; padding: 1.2rem 0 0.4rem;">
-        <h1 style="margin: 0; font-size: 1.9rem; font-weight: 600; letter-spacing: -0.02em;">
+    <div style="text-align: center; padding: 1.2rem 0 0.6rem;">
+        <h1 style="margin: 0; font-size: 1.85rem; font-weight: 600; letter-spacing: -0.02em;">
             Allianz Renewables Atlas
         </h1>
-        <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 0.3rem; letter-spacing: 0.04em;">
+        <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 0.35rem; letter-spacing: 0.04em;">
             Solar PV assets owned directly by Allianz Capital Partners · 2010-2026
         </p>
     </div>
@@ -136,18 +273,10 @@ st.markdown(
 )
 
 parks_df = _load_parks_df()
-severity_map = _load_severity_map()
 reported_map = _load_reported()
 
-# Compute severity at runtime for completeness (some parks may not be in portfolio_sweep yet)
-parks_df["severity"] = parks_df["id"].map(severity_map).fillna("none")
-# Force grey-with-cyan-edge for "none" severity so they're still visible on the dark globe
-parks_df["color"] = parks_df["severity"].map(SEVERITY_COLORS)
-# Bigger min size so markers are visible on the orthographic projection
-parks_df["marker_size"] = parks_df["capacity_mwp"].clip(lower=18, upper=50)
-
 # ---------------------------------------------------------------------------
-# Top metrics — sober, no emoji
+# Top metrics
 # ---------------------------------------------------------------------------
 
 c1, c2, c3, c4 = st.columns(4)
@@ -159,88 +288,15 @@ c4.metric("With production delta", f"{len(reported_map)} of {len(parks_df)}")
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Globe — Plotly orthographic, ISS-style palette
+# Globe — globe.gl iframe with NASA Blue Marble texture
 # ---------------------------------------------------------------------------
 
-# Single trace for click-event simplicity
-fig = go.Figure()
+components.html(_build_globe_html(parks_df), height=600, scrolling=False)
 
-fig.add_trace(
-    go.Scattergeo(
-        lat=parks_df["lat"],
-        lon=parks_df["lon"],
-        mode="markers",
-        marker=dict(
-            size=parks_df["marker_size"].tolist(),
-            color=parks_df["color"].tolist(),
-            line=dict(width=1.5, color="rgba(125, 211, 252, 0.7)"),
-            opacity=0.95,
-        ),
-        text=parks_df["name"],
-        customdata=parks_df[["id", "country", "capacity_mwp", "operator", "commissioning_year"]].values,
-        hovertemplate=(
-            "<b>%{text}</b><br>"
-            "%{customdata[1]} · %{customdata[2]:.1f} MWp<br>"
-            "%{customdata[3]} · COD %{customdata[4]}<extra></extra>"
-        ),
-        name="",
-    )
-)
+# ---------------------------------------------------------------------------
+# Park selector
+# ---------------------------------------------------------------------------
 
-fig.update_geos(
-    showland=True,
-    landcolor="#5a4a35",          # warm tan / desert (vu de l'ISS de nuit)
-    showocean=True,
-    oceancolor="#020512",         # quasi noir
-    showcountries=True,
-    countrycolor="rgba(255, 220, 160, 0.18)",
-    showcoastlines=True,
-    coastlinecolor="rgba(255, 220, 160, 0.40)",
-    showframe=False,
-    bgcolor="rgba(0,0,0,0)",
-    projection=dict(
-        type="orthographic",
-        rotation=dict(lon=2, lat=42, roll=0),  # centré Europe / Iberie
-    ),
-    showlakes=False,
-    showrivers=False,
-)
-
-fig.update_layout(
-    height=560,
-    margin=dict(l=0, r=0, t=0, b=0),
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    showlegend=False,
-)
-
-# Atmospheric halo overlay via Plotly shape (paper coordinates, behind plot)
-fig.add_layout_image(
-    dict(
-        source="data:image/svg+xml;utf8,"
-               "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'>"
-               "<defs><radialGradient id='atm' cx='50%' cy='50%' r='50%'>"
-               "<stop offset='40%' stop-color='rgba(0,0,0,0)'/>"
-               "<stop offset='52%' stop-color='rgba(125,211,252,0.18)'/>"
-               "<stop offset='62%' stop-color='rgba(125,211,252,0.06)'/>"
-               "<stop offset='100%' stop-color='rgba(0,0,0,0)'/>"
-               "</radialGradient></defs>"
-               "<rect width='600' height='600' fill='url(%23atm)'/></svg>",
-        xref="paper", yref="paper",
-        x=0.5, y=0.5,
-        sizex=1.0, sizey=1.0,
-        xanchor="center", yanchor="middle",
-        layer="below",
-        sizing="contain",
-    )
-)
-
-# Render globe with standard plotly_chart (markers render reliably).
-# Click-on-marker via streamlit-plotly-events drops Scattergeo points — we use
-# the dropdown below the globe instead.
-st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-
-# Park selector — single source of truth for which park is shown
 park_options = ["— select a park —"] + parks_df["name"].tolist()
 selected_park_id = st.session_state.get("selected_park_id")
 default_idx = 0
@@ -270,7 +326,7 @@ if not selected_park_id:
     st.markdown(
         """
         <div style="text-align: center; color: #64748b; padding: 1.5rem 0; font-size: 0.85rem;">
-            Click a marker on the globe — or use the dropdown above — to open the park analysis.
+            Pick a park from the list above to open the satellite view and PVGIS analysis.
         </div>
         """,
         unsafe_allow_html=True,
@@ -278,6 +334,44 @@ if not selected_park_id:
     st.stop()
 
 selected_row = parks_df[parks_df["id"] == selected_park_id].iloc[0]
+
+# ---------------------------------------------------------------------------
+# Park header
+# ---------------------------------------------------------------------------
+
+st.markdown(
+    f"""
+    <div class="park-header">
+      <div class="park-title">{selected_row['name']}</div>
+      <div class="park-meta">
+        {selected_row['country']}
+        <span class="dot">·</span>
+        {selected_row['capacity_mwp']:,.1f} MWp
+        <span class="dot">·</span>
+        COD {selected_row['commissioning_year']}
+        <span class="dot">·</span>
+        operator {selected_row['operator']}
+        <span class="dot">·</span>
+        <a href="{selected_row['press_release_url']}" target="_blank">press release</a>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
+# Satellite view (top of the panel — wow effect)
+# ---------------------------------------------------------------------------
+
+components.html(
+    _build_satellite_html(
+        lat=float(selected_row["lat"]),
+        lon=float(selected_row["lon"]),
+        label=selected_row["name"],
+    ),
+    height=280,
+    scrolling=False,
+)
 
 # ---------------------------------------------------------------------------
 # Detail panel — fetch PVGIS and render
@@ -321,33 +415,10 @@ if reported:
         delta_severity = "red"
 
 # ---------------------------------------------------------------------------
-# Park header
+# 4 KPI metrics
 # ---------------------------------------------------------------------------
 
-st.markdown(
-    f"""
-    <div class="park-header">
-      <div class="park-title">{selected_row['name']}</div>
-      <div class="park-meta">
-        {selected_row['country']}
-        <span class="dot">·</span>
-        {selected_row['capacity_mwp']:,.1f} MWp
-        <span class="dot">·</span>
-        COD {selected_row['commissioning_year']}
-        <span class="dot">·</span>
-        operator {selected_row['operator']}
-        <span class="dot">·</span>
-        <a href="{selected_row['press_release_url']}" target="_blank">press release</a>
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ---------------------------------------------------------------------------
-# 4 KPI metrics — terminal style, no emoji
-# ---------------------------------------------------------------------------
-
+st.markdown("<br>", unsafe_allow_html=True)
 m1, m2, m3, m4 = st.columns(4)
 
 m1.metric(
@@ -358,7 +429,7 @@ m1.metric(
 m2.metric(
     "Annual estimate",
     f"{annual_mwh:,.0f} MWh",
-    help="PVGIS PVcalc annual production with 14% system losses.",
+    help="PVGIS annual production with 14% system losses.",
 )
 m3.metric(
     "Capacity factor",
@@ -434,7 +505,7 @@ fig_monthly.update_layout(
 st.plotly_chart(fig_monthly, width="stretch", config={"displayModeBar": False})
 
 # ---------------------------------------------------------------------------
-# About this data — collapsed expander (replaces methodology page)
+# About this data
 # ---------------------------------------------------------------------------
 
 with st.expander("About the methodology", expanded=False):
@@ -450,26 +521,21 @@ an *average* climatic year, computed from 16 years of satellite radiation data
 this specific year.
 
 **Default assumptions.** System losses 14% (inverter, cabling, soiling
-baseline) — varied 10/14/18% for confidence interval. Mounting fixed,
-azimuth 0° south, tilt = lat. crystSi modules.
+baseline). Mounting fixed, azimuth 0° south, tilt = lat. crystSi modules.
 
 **Reading the delta.** A delta of -8% does **not** mean the park
 underperforms. It can reflect: a sub-average climatic year, real losses
 above 14%, marketing rounding in the press release, or a more optimal
-real geometry than our defaults. The delta is a starting point for
-analysis, not a verdict on performance.
+real geometry than our defaults.
 
 **Severity thresholds.** Green: |Δ| < 5% (aligned). Yellow: 5-10% (within
 model uncertainty). Red: ≥ 10% (significant gap, investigate).
 
-**Out of scope (V1).** Wind production (would need windpowerlib + ERA5,
-±15% accuracy below PVGIS standard). Battery storage (no public
-"production" notion for storage). Real-time / day-of measurements
-(operational data, private).
+**Out of scope.** Wind production. Battery storage. Real-time / day-of measurements.
 
 **Data sourcing.** Park list curated from Allianz Capital Partners press
-archive, operator partner publications (WElink, Grenergy, Avantus, Elgin,
-IBC Solar, BayWa), and trade press (PV-Tech, Renewables Now, GEM Wiki),
-cross-checked via Gemini deep research run on 2026-04-30.
+archive, operator partner publications, and trade press, cross-checked via
+deep research run on 2026-04-30. Satellite imagery: Esri World Imagery
+(Maxar, Earthstar Geographics).
 """
     )
