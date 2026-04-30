@@ -156,20 +156,29 @@ def _build_globe_html(parks: pd.DataFrame, height: int = 600) -> str:
     .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
     .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
     .atmosphereColor('#7dd3fc')
-    .atmosphereAltitude(0.20)
+    .atmosphereAltitude(0.22)
     .pointsData(POINTS)
     .pointLat('lat')
     .pointLng('lng')
-    .pointColor(() => '#7dd3fc')
-    .pointAltitude(0.012)
-    .pointRadius(0.32)
+    .pointColor(() => '#fef9c3')              // jaune chaud — cohérent solaire
+    .pointAltitude(0.018)                      // un peu surélevé pour bien sortir du globe
+    .pointRadius(0.42)                         // plus visible
     .pointLabel(d => `
       <div class="label-card">
         <div class="lbl-name">${{d.name}}</div>
         <div class="lbl-meta">${{d.country}} · ${{d.cap.toFixed(1)}} MWp</div>
       </div>
     `)
-    .pointsMerge(true);
+    .pointsMerge(true)
+    // Halo lumineux additionnel pour faire ressortir les markers
+    .ringsData(POINTS)
+    .ringLat('lat')
+    .ringLng('lng')
+    .ringColor(() => 'rgba(254, 249, 195, 0.6)')
+    .ringMaxRadius(2.2)
+    .ringPropagationSpeed(0.8)
+    .ringRepeatPeriod(1800)
+    .ringAltitude(0.005);
 
   globe(elem);
 
@@ -285,7 +294,7 @@ c2.metric("Installed capacity", f"{parks_df['capacity_mwp'].sum():,.0f} MWp")
 c3.metric("Countries", f"{parks_df['country'].nunique()}")
 c4.metric("With production delta", f"{len(reported_map)} of {len(parks_df)}")
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Globe — globe.gl iframe with NASA Blue Marble texture
@@ -325,8 +334,9 @@ else:
 if not selected_park_id:
     st.markdown(
         """
-        <div style="text-align: center; color: #64748b; padding: 1.5rem 0; font-size: 0.85rem;">
-            Pick a park from the list above to open the satellite view and PVGIS analysis.
+        <div class="empty-hint">
+          <span class="empty-prompt">▸</span> Select a park from the dropdown to open
+          satellite imagery and PVGIS analysis.
         </div>
         """,
         unsafe_allow_html=True,
@@ -343,16 +353,27 @@ st.markdown(
     f"""
     <div class="park-header">
       <div class="park-title">{selected_row['name']}</div>
-      <div class="park-meta">
-        {selected_row['country']}
-        <span class="dot">·</span>
-        {selected_row['capacity_mwp']:,.1f} MWp
-        <span class="dot">·</span>
-        COD {selected_row['commissioning_year']}
-        <span class="dot">·</span>
-        operator {selected_row['operator']}
-        <span class="dot">·</span>
-        <a href="{selected_row['press_release_url']}" target="_blank">press release</a>
+      <div class="park-stats">
+        <div class="stat">
+          <div class="stat-label">Country</div>
+          <div class="stat-value">{selected_row['country']}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Capacity</div>
+          <div class="stat-value">{selected_row['capacity_mwp']:,.1f} <span class="stat-unit">MWp</span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Commissioned</div>
+          <div class="stat-value">{selected_row['commissioning_year']}</div>
+        </div>
+        <div class="stat stat-wide">
+          <div class="stat-label">Operator</div>
+          <div class="stat-value stat-operator">{selected_row['operator']}</div>
+        </div>
+        <div class="stat stat-source">
+          <div class="stat-label">Source</div>
+          <div class="stat-value"><a href="{selected_row['press_release_url']}" target="_blank">press release ↗</a></div>
+        </div>
       </div>
     </div>
     """,
@@ -369,7 +390,7 @@ components.html(
         lon=float(selected_row["lon"]),
         label=selected_row["name"],
     ),
-    height=280,
+    height=320,
     scrolling=False,
 )
 
@@ -377,7 +398,7 @@ components.html(
 # Detail panel — fetch PVGIS and render
 # ---------------------------------------------------------------------------
 
-with st.spinner(f"Computing PVGIS for {selected_row['name']}…"):
+with st.spinner("Querying PVGIS…"):
     try:
         hourly_data = _fetch_hourly_cached(
             park_id=selected_park_id,
@@ -418,7 +439,7 @@ if reported:
 # 4 KPI metrics
 # ---------------------------------------------------------------------------
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 m1, m2, m3, m4 = st.columns(4)
 
 m1.metric(
@@ -448,7 +469,7 @@ if reported:
 else:
     m4.metric("Delta vs reported", "—", help="No public production figure available for this park.")
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Single chart — monthly seasonality
@@ -476,10 +497,11 @@ if reported:
         y=avg_monthly_reported,
         line_dash="dash",
         line_color="#facc15",
-        line_width=1.5,
-        annotation_text=f"Reported avg: {avg_monthly_reported:,.0f} MWh/mo",
-        annotation_position="top right",
-        annotation_font=dict(color="#facc15", size=11),
+        line_width=1.2,
+        annotation_text=f"Reported avg · {avg_monthly_reported:,.0f} MWh/mo",
+        annotation_position="bottom right",
+        annotation_yshift=-4,
+        annotation_font=dict(color="#facc15", size=10),
     )
 
 fig_monthly.update_layout(
