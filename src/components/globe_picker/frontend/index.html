@@ -7,7 +7,7 @@
     margin: 0;
     padding: 0;
     height: 100%;
-    background: transparent;
+    background: #000;
     overflow: hidden;
     font-family: -apple-system, "Inter", system-ui, sans-serif;
   }
@@ -19,7 +19,7 @@
     color: #f1f5f9;
     padding: 10px 14px;
     border-radius: 8px;
-    border: 1px solid rgba(125, 211, 252, 0.4);
+    border: 1px solid rgba(232, 228, 214, 0.4);
     font-size: 12px;
     letter-spacing: 0.005em;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
@@ -72,16 +72,16 @@
 
   function buildGlobe(parks, height) {
     const elem = document.getElementById("globeViz");
-    globe = Globe({ rendererConfig: { alpha: true, antialias: true } })(elem)
-      .backgroundColor("rgba(0,0,0,0)")  // transparent — let page bg show through
+    globe = Globe()(elem)
       .globeImageUrl("https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg")
       .bumpImageUrl("https://unpkg.com/three-globe/example/img/earth-topology.png")
-      .atmosphereColor("#7dd3fc")
-      .atmosphereAltitude(0.22)
+      .backgroundImageUrl("https://unpkg.com/three-globe/example/img/night-sky.png")  // restore stars in globe iframe
+      .atmosphereColor("#ffffff")        // soft white halo, no cyan
+      .atmosphereAltitude(0.18)
       .pointsData(parks)
       .pointLat("lat")
       .pointLng("lng")
-      .pointColor(() => "#7dd3fc")
+      .pointColor(() => "#e8e4d6")
       .pointAltitude(0.014)
       .pointRadius(0.45)
       .pointResolution(20)
@@ -95,7 +95,7 @@
       .ringsData(parks)
       .ringLat("lat")
       .ringLng("lng")
-      .ringColor(() => "rgba(125, 211, 252, 0.55)")
+      .ringColor(() => "rgba(232, 228, 214, 0.55)")
       .ringMaxRadius(2.0)
       .ringPropagationSpeed(0.7)
       .ringRepeatPeriod(2200)

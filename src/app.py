@@ -119,7 +119,7 @@ def _build_satellite_html(lat: float, lon: float, label: str) -> str:
     background: rgba(5, 8, 16, 0.85) !important;
     color: #94a3b8 !important;
   }}
-  .leaflet-control-attribution a {{ color: #7dd3fc !important; }}
+  .leaflet-control-attribution a {{ color: #e8e4d6 !important; }}
   .leaflet-control-zoom a {{
     background: rgba(13, 19, 32, 0.92) !important;
     color: #cbd5e1 !important;
@@ -128,7 +128,7 @@ def _build_satellite_html(lat: float, lon: float, label: str) -> str:
   }}
   .leaflet-control-zoom a:hover {{
     background: rgba(13, 19, 32, 1) !important;
-    color: #7dd3fc !important;
+    color: #e8e4d6 !important;
   }}
 </style>
 </head>
@@ -145,12 +145,12 @@ def _build_satellite_html(lat: float, lon: float, label: str) -> str:
   ).addTo(map);
 
   L.circleMarker([{lat}, {lon}], {{
-    radius: 14, color: '#7dd3fc', weight: 2,
-    fillColor: '#7dd3fc', fillOpacity: 0.12,
+    radius: 14, color: '#e8e4d6', weight: 2,
+    fillColor: '#e8e4d6', fillOpacity: 0.12,
   }}).addTo(map).bindPopup('{label_safe}');
   L.circleMarker([{lat}, {lon}], {{
-    radius: 5, color: '#7dd3fc', weight: 2,
-    fillColor: '#7dd3fc', fillOpacity: 0.95,
+    radius: 5, color: '#e8e4d6', weight: 2,
+    fillColor: '#e8e4d6', fillOpacity: 0.95,
   }}).addTo(map);
 </script>
 </body>
@@ -261,6 +261,7 @@ st.markdown(
         <div class="stat stat-source">
           <div class="stat-label">Source</div>
           <div class="stat-value"><a href="{selected_row['press_release_url']}" target="_blank">press release ↗</a></div>
+          <div class="stat-value" style="margin-top:4px;"><a href="https://www.openstreetmap.org/?mlat={selected_row['lat']}&amp;mlon={selected_row['lon']}#map=15/{selected_row['lat']}/{selected_row['lon']}" target="_blank">verify coords on OSM ↗</a></div>
         </div>
       </div>
     </div>
@@ -406,9 +407,9 @@ fig_daily.add_trace(
         x=day_dates,
         y=smooth,
         mode="lines",
-        line=dict(color="#7dd3fc", width=2.2, shape="spline", smoothing=0.5),
+        line=dict(color="#e8e4d6", width=2.2, shape="spline", smoothing=0.5),
         fill="tozeroy",
-        fillcolor="rgba(125, 211, 252, 0.10)",
+        fillcolor="rgba(232, 228, 214, 0.10)",
         hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
         name="Daily output",
     )
@@ -439,7 +440,7 @@ fig_daily.update_layout(
     showlegend=False,
     hoverlabel=dict(
         bgcolor="rgba(13, 19, 32, 0.95)",
-        bordercolor="rgba(125, 211, 252, 0.4)",
+        bordercolor="rgba(232, 228, 214, 0.4)",
         font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
     ),
 )
@@ -459,8 +460,8 @@ fig_monthly.add_trace(
         x=MONTH_NAMES,
         y=monthly_mwh,
         marker=dict(
-            color="rgba(125, 211, 252, 0.78)",
-            line=dict(color="rgba(125, 211, 252, 0.95)", width=0.8),
+            color="rgba(232, 228, 214, 0.78)",
+            line=dict(color="rgba(232, 228, 214, 0.95)", width=0.8),
         ),
         hovertemplate="%{x} · %{y:,.0f} MWh<extra></extra>",
         name="Estimated",
@@ -502,7 +503,7 @@ fig_monthly.update_layout(
     showlegend=False,
     hoverlabel=dict(
         bgcolor="rgba(13, 19, 32, 0.95)",
-        bordercolor="rgba(125, 211, 252, 0.4)",
+        bordercolor="rgba(232, 228, 214, 0.4)",
         font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
     ),
 )
