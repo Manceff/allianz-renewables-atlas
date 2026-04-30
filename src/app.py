@@ -29,6 +29,7 @@ from src.lib.reported_production import load_reported_production
 from src.lib.solar_metrics import (
     capacity_factor_annual,
     estimate_for_date,
+    hourly_to_daily,
     monthly_aggregates,
 )
 
@@ -155,14 +156,14 @@ def _build_globe_html(parks: pd.DataFrame, height: int = 600) -> str:
     .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
     .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
     .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
-    .atmosphereColor('#7dd3fc')
-    .atmosphereAltitude(0.22)
+    .atmosphereColor('#fbbf24')                // single accent — warm amber, solar resonance
+    .atmosphereAltitude(0.20)
     .pointsData(POINTS)
     .pointLat('lat')
     .pointLng('lng')
-    .pointColor(() => '#fef9c3')              // jaune chaud — cohérent solaire
-    .pointAltitude(0.018)                      // un peu surélevé pour bien sortir du globe
-    .pointRadius(0.42)                         // plus visible
+    .pointColor(() => '#fbbf24')
+    .pointAltitude(0.014)
+    .pointRadius(0.38)
     .pointLabel(d => `
       <div class="label-card">
         <div class="lbl-name">${{d.name}}</div>
@@ -170,15 +171,14 @@ def _build_globe_html(parks: pd.DataFrame, height: int = 600) -> str:
       </div>
     `)
     .pointsMerge(true)
-    // Halo lumineux additionnel pour faire ressortir les markers
     .ringsData(POINTS)
     .ringLat('lat')
     .ringLng('lng')
-    .ringColor(() => 'rgba(254, 249, 195, 0.6)')
-    .ringMaxRadius(2.2)
-    .ringPropagationSpeed(0.8)
-    .ringRepeatPeriod(1800)
-    .ringAltitude(0.005);
+    .ringColor(() => 'rgba(251, 191, 36, 0.55)')
+    .ringMaxRadius(2.0)
+    .ringPropagationSpeed(0.7)
+    .ringRepeatPeriod(2200)
+    .ringAltitude(0.003);
 
   globe(elem);
 
@@ -220,13 +220,23 @@ def _build_satellite_html(lat: float, lon: float, label: str, height: int = 280)
 <meta charset="utf-8" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-  html, body {{ margin: 0; padding: 0; height: 100%; background: #0a0e1a; }}
-  #map {{ width: 100%; height: 100%; border-radius: 8px; }}
-  .leaflet-control-attribution {{ font-size: 9px !important; opacity: 0.6; }}
+  html, body {{ margin: 0; padding: 0; height: 100%; background: #050810; }}
+  #map {{ width: 100%; height: 100%; border-radius: 10px; }}
+  .leaflet-control-attribution {{
+    font-size: 9px !important; opacity: 0.55;
+    background: rgba(5, 8, 16, 0.85) !important;
+    color: #94a3b8 !important;
+  }}
+  .leaflet-control-attribution a {{ color: #fbbf24 !important; }}
   .leaflet-control-zoom a {{
-    background: rgba(20, 27, 46, 0.85) !important;
+    background: rgba(13, 19, 32, 0.92) !important;
     color: #cbd5e1 !important;
-    border: 1px solid rgba(125, 211, 252, 0.2) !important;
+    border: 1px solid rgba(148, 163, 184, 0.18) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+  }}
+  .leaflet-control-zoom a:hover {{
+    background: rgba(13, 19, 32, 1) !important;
+    color: #fbbf24 !important;
   }}
 </style>
 </head>
@@ -235,27 +245,27 @@ def _build_satellite_html(lat: float, lon: float, label: str, height: int = 280)
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   const map = L.map('map', {{ zoomControl: true, attributionControl: true }})
-    .setView([{lat}, {lon}], 13);
+    .setView([{lat}, {lon}], 14);
 
   L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
     {{ maxZoom: 18, attribution: 'Esri, Maxar, Earthstar Geographics' }}
   ).addTo(map);
 
-  // Park location ring marker
+  // Outer ring + inner dot — accent amber
   L.circleMarker([{lat}, {lon}], {{
-    radius: 12,
-    color: '#7dd3fc',
+    radius: 14,
+    color: '#fbbf24',
     weight: 2,
-    fillColor: '#7dd3fc',
-    fillOpacity: 0.15,
+    fillColor: '#fbbf24',
+    fillOpacity: 0.12,
   }}).addTo(map).bindPopup('{label_safe}');
   L.circleMarker([{lat}, {lon}], {{
-    radius: 4,
-    color: '#7dd3fc',
+    radius: 5,
+    color: '#fbbf24',
     weight: 2,
-    fillColor: '#7dd3fc',
-    fillOpacity: 0.9,
+    fillColor: '#fbbf24',
+    fillOpacity: 0.95,
   }}).addTo(map);
 </script>
 </body>
@@ -469,13 +479,111 @@ if reported:
 else:
     m4.metric("Delta vs reported", "—", help="No public production figure available for this park.")
 
-st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+# Source caption — explicit traceability for the reported figure
+if reported:
+    src_url = reported.get("source_url", "")
+    src_year = reported.get("year", "—")
+    src_note = reported.get("note", "")
+    st.markdown(
+        f"""
+        <div class="source-caption">
+          <span class="src-label">Reported source</span>
+          {float(reported['annual_mwh']):,.0f} MWh · {src_year} ·
+          <a href="{src_url}" target="_blank">{src_url[:80]}{'…' if len(src_url) > 80 else ''}</a>
+          <div class="src-note">{src_note}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <div class="source-caption">
+          <span class="src-label">Reported source</span>
+          No public production figure identified for this park — delta cannot be computed.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Single chart — monthly seasonality
 # ---------------------------------------------------------------------------
 
 monthly_mwh = [m["production_mwh"] for m in monthly]
+daily_kwh = hourly_to_daily(hourly_data["hourly_production_kwh"])
+daily_mwh = [v / 1000.0 for v in daily_kwh]
+day_dates = pd.date_range("2019-01-01", periods=365, freq="D")
+
+# ----- Daily seasonality chart (smooth, fluid, premium) -------------
+fig_daily = go.Figure()
+fig_daily.add_trace(
+    go.Scatter(
+        x=day_dates,
+        y=daily_mwh,
+        mode="lines",
+        line=dict(color="#fbbf24", width=1.4, shape="spline", smoothing=0.6),
+        fill="tozeroy",
+        fillcolor="rgba(251, 191, 36, 0.10)",
+        hovertemplate="%{x|%d %b} · %{y:,.1f} MWh<extra></extra>",
+        name="Daily output",
+    )
+)
+
+# 7-day rolling mean — slightly emphasized
+import numpy as np
+arr = np.asarray(daily_mwh)
+window = 7
+rolling = np.convolve(arr, np.ones(window) / window, mode="same")
+fig_daily.add_trace(
+    go.Scatter(
+        x=day_dates,
+        y=rolling,
+        mode="lines",
+        line=dict(color="rgba(251, 191, 36, 0.9)", width=2.4, shape="spline", smoothing=0.4),
+        hoverinfo="skip",
+        name="7-day rolling mean",
+    )
+)
+
+fig_daily.update_layout(
+    title=dict(
+        text="Daily output across the climatic year",
+        font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
+        x=0.0,
+        xanchor="left",
+        pad=dict(b=8),
+    ),
+    height=240,
+    margin=dict(l=0, r=0, t=44, b=10),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    xaxis=dict(
+        showgrid=False,
+        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
+        tickformat="%b",
+        dtick="M1",
+    ),
+    yaxis=dict(
+        gridcolor="rgba(148, 163, 184, 0.06)",
+        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
+        title=None,
+        ticksuffix=" MWh",
+    ),
+    showlegend=False,
+    hoverlabel=dict(
+        bgcolor="rgba(13, 19, 32, 0.95)",
+        bordercolor="rgba(251, 191, 36, 0.4)",
+        font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
+    ),
+)
+
+st.plotly_chart(fig_daily, width="stretch", config={"displayModeBar": False})
+
+# ----- Monthly bar chart (kept as macro view) ------------------------
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
 fig_monthly = go.Figure()
 fig_monthly.add_trace(
@@ -483,8 +591,8 @@ fig_monthly.add_trace(
         x=MONTH_NAMES,
         y=monthly_mwh,
         marker=dict(
-            color="rgba(125, 211, 252, 0.85)",
-            line=dict(color="rgba(125, 211, 252, 1)", width=1),
+            color="rgba(251, 191, 36, 0.78)",
+            line=dict(color="rgba(251, 191, 36, 0.95)", width=0.8),
         ),
         hovertemplate="%{x} · %{y:,.0f} MWh<extra></extra>",
         name="Estimated",
@@ -495,33 +603,42 @@ if reported:
     avg_monthly_reported = float(reported["annual_mwh"]) / 12.0
     fig_monthly.add_hline(
         y=avg_monthly_reported,
-        line_dash="dash",
-        line_color="#facc15",
+        line_dash="dot",
+        line_color="rgba(248, 250, 252, 0.5)",
         line_width=1.2,
-        annotation_text=f"Reported avg · {avg_monthly_reported:,.0f} MWh/mo",
-        annotation_position="bottom right",
-        annotation_yshift=-4,
-        annotation_font=dict(color="#facc15", size=10),
+        annotation_text=f"Reported / 12 · {avg_monthly_reported:,.0f}",
+        annotation_position="top right",
+        annotation_yshift=2,
+        annotation_font=dict(color="#cbd5e1", size=10, family="JetBrains Mono"),
     )
 
 fig_monthly.update_layout(
     title=dict(
         text="Monthly production estimate (MWh)",
-        font=dict(color="#cbd5e1", size=14, weight=500),
+        font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
         x=0.0,
         xanchor="left",
+        pad=dict(b=8),
     ),
-    height=320,
-    margin=dict(l=0, r=0, t=40, b=0),
+    height=260,
+    margin=dict(l=0, r=0, t=44, b=0),
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    xaxis=dict(showgrid=False, tickfont=dict(color="#94a3b8")),
+    xaxis=dict(
+        showgrid=False,
+        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
+    ),
     yaxis=dict(
-        gridcolor="rgba(125, 211, 252, 0.08)",
-        tickfont=dict(color="#94a3b8"),
+        gridcolor="rgba(148, 163, 184, 0.06)",
+        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
         title=None,
     ),
     showlegend=False,
+    hoverlabel=dict(
+        bgcolor="rgba(13, 19, 32, 0.95)",
+        bordercolor="rgba(251, 191, 36, 0.4)",
+        font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
+    ),
 )
 
 st.plotly_chart(fig_monthly, width="stretch", config={"displayModeBar": False})

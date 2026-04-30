@@ -1,284 +1,341 @@
 /* =====================================================================
-   Allianz Renewables Atlas — JARVIS/Tesla console aesthetic
-   Dark + starfield + glass panels + cyan accent
+   Allianz Renewables Atlas — design system
+   Premium dark, single accent, no AI fingerprint, blends with globe iframe
 ===================================================================== */
 
-/* Hide Streamlit chrome we don't want */
-#MainMenu, header[data-testid="stHeader"], footer { visibility: hidden; }
+/* ---- Fonts (Geist + JetBrains Mono via Google Fonts CDN) ----------- */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-/* Body background — deep navy gradient + starfield */
-.stApp {
-  background:
-    radial-gradient(ellipse at top, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at bottom, rgba(125, 211, 252, 0.05) 0%, transparent 50%),
-    linear-gradient(180deg, #0a0e1a 0%, #141b2e 100%);
-  background-attachment: fixed;
+/* ---- Tokens -------------------------------------------------------- */
+:root {
+  --bg-deep:        #050810;        /* match globe iframe black */
+  --bg-elevated:    #0d1320;        /* surface cards */
+  --bg-overlay:     rgba(13, 19, 32, 0.7);
+  --border-subtle:  rgba(148, 163, 184, 0.10);
+  --border-strong:  rgba(148, 163, 184, 0.18);
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
+  --text-faint:     #475569;
+  --accent:         #fbbf24;        /* warm amber — solar resonance, single accent */
+  --accent-soft:    rgba(251, 191, 36, 0.14);
+  --severity-green: #34d399;
+  --severity-amber: #fbbf24;
+  --severity-red:   #fb7185;
+  --shadow-tinted:  0 4px 24px rgba(5, 8, 16, 0.4), 0 1px 3px rgba(5, 8, 16, 0.6);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --grain-opacity: 0.025;
 }
 
-/* Starfield overlay — pure CSS, no external assets */
+/* ---- Hide Streamlit chrome ----------------------------------------- */
+#MainMenu, header[data-testid="stHeader"], footer { visibility: hidden; }
+
+/* ---- App background — uniform deep dark, blends with globe iframe -- */
+html, body, .stApp,
+[data-testid="stAppViewContainer"] {
+  background: var(--bg-deep) !important;
+  color: var(--text-primary);
+  font-family: 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+}
+
+/* Subtle grain noise overlay — kills the digital flatness ----------- */
 .stApp::before {
   content: "";
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-image:
-    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 60% 70%, rgba(255,255,255,0.4) 0%, transparent 100%),
-    radial-gradient(2px 2px at 80% 20%, rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,0.4) 0%, transparent 100%),
-    radial-gradient(1px 1px at 90% 50%, rgba(255,255,255,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 10% 90%, rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 70% 10%, rgba(255,255,255,0.4) 0%, transparent 100%),
-    radial-gradient(2px 2px at 30% 60%, rgba(255,255,255,0.3) 0%, transparent 100%),
-    radial-gradient(1px 1px at 50% 40%, rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 85% 75%, rgba(255,255,255,0.4) 0%, transparent 100%);
+  inset: 0;
   pointer-events: none;
-  z-index: 0;
-  opacity: 0.7;
+  z-index: 1;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* Main content above starfield */
-[data-testid="stAppViewContainer"] > .main { position: relative; z-index: 1; }
+[data-testid="stMainBlockContainer"] > * { position: relative; z-index: 2; }
 
-/* Sidebar — glass panel */
+/* ---- Sidebar ------------------------------------------------------- */
 [data-testid="stSidebar"] {
-  background: rgba(20, 27, 46, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-right: 1px solid rgba(125, 211, 252, 0.15);
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border-subtle);
 }
 
-/* Headers — Inter / system */
+/* ---- Typography ---------------------------------------------------- */
 h1, h2, h3, h4 {
-  font-family: -apple-system, "Inter", "Segoe UI", system-ui, sans-serif;
-  letter-spacing: -0.02em;
-  color: #f1f5f9;
+  font-family: 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  color: var(--text-primary);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
-h1 { font-weight: 700; }
+h1 { font-weight: 600; line-height: 1.05; }
 h2 { font-weight: 600; }
+h3 { font-weight: 500; }
 
-/* Caption, small text */
-.stCaption, [data-testid="stCaptionContainer"] {
-  color: #94a3b8;
+p, span, label, [data-testid="stMarkdownContainer"] p {
+  color: var(--text-secondary);
+  font-family: 'Geist', sans-serif;
+  letter-spacing: -0.005em;
 }
 
-/* Metric blocks — glass effect */
+/* ---- Streamlit metric cards — refined --------------------------- */
 [data-testid="stMetric"] {
-  background: rgba(20, 27, 46, 0.5);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(125, 211, 252, 0.15);
-  border-radius: 8px;
-  padding: 16px;
-  transition: border-color 0.2s ease;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 18px 20px 16px;
+  box-shadow: var(--shadow-tinted);
+  transition: border-color 200ms ease-out, transform 200ms ease-out;
 }
 
 [data-testid="stMetric"]:hover {
-  border-color: rgba(125, 211, 252, 0.35);
+  border-color: var(--border-strong);
 }
 
 [data-testid="stMetricValue"] {
-  font-family: "JetBrains Mono", "IBM Plex Mono", "SF Mono", Consolas, monospace;
-  color: #7dd3fc;
-  font-weight: 600;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', monospace;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.01em;
+  font-size: 1.55rem;
 }
 
-[data-testid="stMetricLabel"] {
-  color: #94a3b8;
-  font-size: 0.75rem;
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] p {
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-/* Selectbox, multiselect — cleaner */
-[data-baseweb="select"] > div {
-  background: rgba(20, 27, 46, 0.6) !important;
-  border: 1px solid rgba(125, 211, 252, 0.2) !important;
-}
-
-/* Plotly charts — let them breathe */
-.js-plotly-plot {
-  background: transparent !important;
-}
-
-/* Terminal-style data panel — inject via CSS class */
-.terminal-panel {
-  background: rgba(10, 14, 26, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(125, 211, 252, 0.25);
-  border-radius: 10px;
-  padding: 24px;
-  font-family: "JetBrains Mono", "IBM Plex Mono", "SF Mono", Consolas, monospace;
-  font-size: 0.875rem;
-  line-height: 1.6;
-  color: #cbd5e1;
-  box-shadow: 0 0 30px rgba(56, 189, 248, 0.08);
-}
-
-.terminal-panel .term-prompt {
-  color: #7dd3fc;
-  font-weight: 600;
-}
-
-.terminal-panel .term-label {
-  color: #94a3b8;
-  display: inline-block;
-  min-width: 220px;
-}
-
-.terminal-panel .term-value {
-  color: #e2e8f0;
+  letter-spacing: 0.13em;
   font-weight: 500;
 }
 
-.terminal-panel .term-divider {
-  border-top: 1px solid rgba(125, 211, 252, 0.15);
-  margin: 12px 0;
-}
-
-.terminal-panel .term-meta {
-  color: #64748b;
-  font-size: 0.75rem;
-  font-style: italic;
-  margin-top: 4px;
-}
-
-/* Severity badges */
-.badge-green { color: #10b981; }
-.badge-yellow { color: #facc15; }
-.badge-red { color: #f87171; }
-.badge-grey { color: #64748b; }
-
-/* Subtle dividers */
-hr {
-  border: none;
-  border-top: 1px solid rgba(125, 211, 252, 0.1);
-  margin: 24px 0;
-}
-
-/* Provenance tooltip — small italic grey under values */
-.provenance {
-  color: #64748b;
+[data-testid="stMetricDelta"] {
   font-size: 0.7rem;
-  font-style: italic;
-  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.06em;
+  font-weight: 500;
 }
 
-/* Park header — investment dossier card */
+/* ---- Selectbox ---------------------------------------------------- */
+[data-baseweb="select"] > div {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-sm) !important;
+  transition: border-color 200ms ease-out;
+}
+
+[data-baseweb="select"] > div:hover {
+  border-color: var(--border-strong) !important;
+}
+
+/* ---- Park header — investment dossier ---------------------------- */
 .park-header {
-  background: rgba(20, 27, 46, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(125, 211, 252, 0.18);
-  border-radius: 10px;
-  padding: 22px 26px 20px;
-  margin: 12px 0 18px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px 22px;
+  margin: 16px 0 18px;
+  box-shadow: var(--shadow-tinted);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle accent bar on the left edge for visual anchor */
+.park-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  background: linear-gradient(180deg, var(--accent) 0%, transparent 100%);
+  opacity: 0.6;
 }
 
 .park-title {
-  font-size: 1.5rem;
+  font-family: 'Geist', sans-serif;
+  font-size: 1.55rem;
   font-weight: 600;
-  color: #f8fafc;
-  letter-spacing: -0.015em;
-  margin-bottom: 18px;
-  line-height: 1.2;
+  color: var(--text-primary);
+  letter-spacing: -0.022em;
+  line-height: 1.15;
+  margin-bottom: 22px;
+  text-wrap: balance;
 }
 
 .park-stats {
   display: grid;
   grid-template-columns: 0.7fr 1fr 1fr 2.2fr 1.1fr;
-  gap: 0 28px;
+  gap: 0 32px;
   align-items: start;
 }
 
-.park-stats .stat {
-  min-width: 0;
-}
-
-.park-stats .stat-wide {
-  /* operator: takes more room, allows wrap */
-}
-
-.park-stats .stat-source {
-  text-align: right;
-}
+.park-stats .stat-source { text-align: right; }
 
 .park-stats .stat-label {
-  font-family: "JetBrains Mono", "IBM Plex Mono", "SF Mono", Consolas, monospace;
-  font-size: 0.65rem;
-  letter-spacing: 0.12em;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #64748b;
-  margin-bottom: 6px;
+  color: var(--text-faint);
+  margin-bottom: 7px;
   font-weight: 500;
 }
 
 .park-stats .stat-value {
+  font-family: 'Geist', sans-serif;
   font-size: 0.95rem;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-weight: 500;
   line-height: 1.4;
   letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
 }
 
 .park-stats .stat-unit {
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-weight: 400;
-  font-size: 0.85rem;
-  margin-left: 2px;
+  font-size: 0.78rem;
+  margin-left: 3px;
+  letter-spacing: 0;
 }
 
 .park-stats .stat-operator {
   font-size: 0.85rem;
-  color: #cbd5e1;
+  color: var(--text-secondary);
+  font-weight: 400;
 }
 
 .park-stats .stat-value a {
-  color: #7dd3fc;
+  color: var(--accent);
   text-decoration: none;
   font-size: 0.85rem;
-  border-bottom: 1px dotted rgba(125, 211, 252, 0.35);
-  transition: border-bottom-color 150ms ease-out;
+  font-weight: 500;
+  border-bottom: 1px dotted rgba(251, 191, 36, 0.4);
+  transition: border-bottom-color 180ms ease-out, color 180ms ease-out;
   white-space: nowrap;
 }
 
 .park-stats .stat-value a:hover {
-  border-bottom-color: rgba(125, 211, 252, 0.9);
+  border-bottom-color: var(--accent);
+  color: #fcd34d;
 }
 
 @media (max-width: 900px) {
-  .park-stats {
-    grid-template-columns: 1fr 1fr;
-    gap: 16px 24px;
-  }
+  .park-stats { grid-template-columns: 1fr 1fr; gap: 18px 24px; }
   .park-stats .stat-wide,
-  .park-stats .stat-source {
-    grid-column: span 2;
-    text-align: left;
-  }
+  .park-stats .stat-source { grid-column: span 2; text-align: left; }
 }
 
-/* Empty state — terminal hint */
-.empty-hint {
-  text-align: center;
-  color: #64748b;
-  padding: 2.4rem 0 1.6rem;
-  font-size: 0.9rem;
-  letter-spacing: 0.01em;
-  font-family: "JetBrains Mono", "IBM Plex Mono", monospace;
+/* ---- Source caption — under the reported delta -------------------- */
+.source-caption {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.005em;
+  line-height: 1.55;
 }
 
-.empty-hint .empty-prompt {
-  color: #7dd3fc;
+.source-caption .src-label {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  letter-spacing: 0.13em;
   margin-right: 8px;
 }
 
-/* Vertical spacer (replaces rough <br> tags) */
-.vspace {
-  height: 18px;
+.source-caption a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(251, 191, 36, 0.35);
+  transition: border-bottom-color 180ms ease-out;
 }
 
-/* Globe wrapper — kept for legacy reference */
-.globe-wrapper {
-  position: relative;
+.source-caption a:hover {
+  border-bottom-color: var(--accent);
+}
+
+.source-caption .src-note {
+  color: var(--text-muted);
+  font-style: normal;
+  margin-left: 6px;
+}
+
+/* ---- Empty state — terminal hint ---------------------------------- */
+.empty-hint {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 2.4rem 0 1.6rem;
+  font-size: 0.88rem;
+  letter-spacing: 0.005em;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+}
+
+.empty-hint .empty-prompt {
+  color: var(--accent);
+  margin-right: 8px;
+}
+
+/* ---- Spacing utility ---------------------------------------------- */
+.vspace { height: 18px; }
+.vspace-lg { height: 28px; }
+
+/* ---- Hide caption beneath plotly charts ----------------------------*/
+[data-testid="stCaption"] {
+  font-family: 'JetBrains Mono', monospace !important;
+  color: var(--text-muted) !important;
+  font-size: 0.7rem !important;
+  letter-spacing: 0.005em !important;
+}
+
+/* ---- Expander (methodology) --------------------------------------- */
+[data-testid="stExpander"] {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+[data-testid="stExpander"] details summary {
+  font-family: 'Geist', sans-serif;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+[data-testid="stExpander"] details summary:hover {
+  color: var(--text-primary);
+}
+
+/* ---- Dividers ----------------------------------------------------- */
+hr {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 24px 0;
+}
+
+/* ---- Spinner — refined -------------------------------------------- */
+[data-testid="stSpinner"] {
+  color: var(--accent) !important;
+}
+
+[data-testid="stSpinner"] > div > div {
+  border-color: var(--accent) transparent transparent !important;
+}
+
+/* ---- Streamlit tooltip / help icon -------------------------------- */
+[data-testid="stTooltipIcon"] svg {
+  color: var(--text-faint);
+  transition: color 180ms ease-out;
+}
+
+[data-testid="stTooltipIcon"]:hover svg {
+  color: var(--text-secondary);
 }

@@ -90,7 +90,7 @@ parks:
     name: "Solara 4 (Central Fotovoltaica Alcoutim)"
     country: PT
     technology: solar
-    coordinates: [37.3468, -7.6956]  # Vaqueiros, Alcoutim, Algarve
+    coordinates: [37.365, -7.665]  # Vaqueiros, Alcoutim, Algarve. Source GEM Wiki (exact) https://www.gem.wiki/Riccardo_Totta_Solar_Plant
     capacity_mwp: 219
     commissioning_year: 2021  # signé 2018, retardé construction + COVID
     operator: "WElink Energy / China Triumph International Engineering"
