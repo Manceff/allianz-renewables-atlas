@@ -48,6 +48,62 @@ def get_zone(country: str, park_id: str | None = None) -> str | None:
     return COUNTRY_TO_ZONE.get(country)
 
 
+def fetch_current_spot_price(zone: str) -> dict | None:
+    """Return the current-hour day-ahead spot price for a zone.
+
+    Fetches a 2-day window around today and picks the hour matching now.
+    Not cached — caller should wrap in @st.cache_data with TTL ~1 hour.
+
+    Returns dict with:
+        price_eur_mwh: current-hour spot price
+        time_iso: timestamp of the picked hour
+        zone: bidding zone
+    """
+    import datetime as _dt
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    start = (now - _dt.timedelta(days=1)).strftime("%Y-%m-%d")
+    end = (now + _dt.timedelta(days=1)).strftime("%Y-%m-%d")
+
+    try:
+        resp = requests.get(
+            API_URL,
+            params={"bzn": zone, "start": start, "end": end},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        payload = resp.json()
+    except (requests.RequestException, ValueError):
+        return None
+
+    timestamps = payload.get("unix_seconds") or []
+    prices = payload.get("price") or []
+    if not timestamps or not prices:
+        return None
+
+    # Pick the timestamp closest to (but not after) now
+    now_ts = int(now.timestamp())
+    best_idx = None
+    best_delta = None
+    for i, ts in enumerate(timestamps):
+        if ts > now_ts:
+            continue
+        delta = now_ts - ts
+        if best_delta is None or delta < best_delta:
+            best_delta = delta
+            best_idx = i
+
+    if best_idx is None:
+        return None
+
+    return {
+        "price_eur_mwh": float(prices[best_idx]) if prices[best_idx] is not None else None,
+        "time_iso": _dt.datetime.fromtimestamp(timestamps[best_idx], _dt.timezone.utc).isoformat(),
+        "zone": zone,
+    }
+
+
 def fetch_hourly_prices(zone: str, year: int, force_refresh: bool = False) -> list[float] | None:
     """Fetch hourly day-ahead prices (EUR/MWh) for a zone+year. Cached locally.
 

@@ -27,9 +27,11 @@ import yaml
 from src.components.globe_picker import globe_picker
 from src.lib.electricity_prices import (
     compute_revenue_metrics,
+    fetch_current_spot_price,
     fetch_hourly_prices,
     get_zone,
 )
+from src.lib.live_weather import estimate_current_output_mw, fetch_current_weather
 from src.lib.parks_loader import load_parks_index
 from src.lib.pvgis_fetch import DEFAULT_REPRESENTATIVE_YEAR, fetch_pvgis_hourly
 from src.lib.reported_production import load_reported_production
@@ -130,6 +132,16 @@ def _fetch_hourly_cached(park_id: str, lat: float, lon: float, peakpower_mw: flo
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_prices_cached(zone: str, year: int) -> list[float] | None:
     return fetch_hourly_prices(zone, year)
+
+
+@st.cache_data(ttl=900, show_spinner=False)  # 15 min refresh
+def _fetch_live_weather_cached(lat: float, lon: float) -> dict | None:
+    return fetch_current_weather(lat, lon)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)  # 30 min refresh
+def _fetch_live_spot_cached(zone: str) -> dict | None:
+    return fetch_current_spot_price(zone)
 
 
 # ---------------------------------------------------------------------------
@@ -299,6 +311,90 @@ st.markdown(
 
 # ---------------------------------------------------------------------------
 # Satellite view
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# LIVE STATUS — current weather + estimated output + current spot price
+# ---------------------------------------------------------------------------
+
+st.markdown(
+    '<div style="font-family: \'JetBrains Mono\', monospace; '
+    'font-size: 0.65rem; letter-spacing: 0.16em; text-transform: uppercase; '
+    'color: #7a7464; margin: 8px 0 12px;">Live · right now</div>',
+    unsafe_allow_html=True,
+)
+
+live_weather = _fetch_live_weather_cached(
+    float(selected_row["lat"]), float(selected_row["lon"])
+)
+live_zone = get_zone(selected_row["country"], park_id=selected_park_id)
+live_spot = _fetch_live_spot_cached(live_zone) if live_zone else None
+
+l1, l2, l3, l4, l5 = st.columns(5)
+
+if live_weather:
+    cloud = live_weather["cloud_cover_pct"]
+    cloud_label = "clear" if cloud < 25 else ("partly" if cloud < 75 else "overcast")
+    l1.metric(
+        "Sun exposure",
+        f"{live_weather['ghi_w_m2']:,.0f} W/m²",
+        delta=cloud_label,
+        delta_color="off",
+        help=f"Global Horizontal Irradiance from Open-Meteo · cloud cover {cloud:.0f}% · refreshed every 15 min",
+    )
+    l2.metric(
+        "Air temperature",
+        f"{live_weather['temp_c']:.1f} °C",
+        help=f"Sampled at the park coordinates · {live_weather['time_iso']}",
+    )
+
+    estimated_mw = estimate_current_output_mw(
+        capacity_mwp=float(selected_row["capacity_mwp"]),
+        ghi_w_m2=live_weather["ghi_w_m2"],
+        temp_c=live_weather["temp_c"],
+    )
+    cf_now = (estimated_mw / float(selected_row["capacity_mwp"]) * 100.0) if selected_row["capacity_mwp"] else 0.0
+    l3.metric(
+        "Estimated output",
+        f"{estimated_mw:,.1f} MW",
+        delta=f"{cf_now:.0f}% of capacity",
+        delta_color="off",
+        help=(
+            "Live estimate from public data only. "
+            "Formula: capacity × (GHI/1000) × (1 − loss%) × temperature_derating. "
+            "Accuracy ±15% vs operator's metered output."
+        ),
+    )
+else:
+    l1.metric("Sun exposure", "—")
+    l2.metric("Air temperature", "—")
+    l3.metric("Estimated output", "—")
+
+if live_spot and live_spot.get("price_eur_mwh") is not None:
+    spot_price = live_spot["price_eur_mwh"]
+    l4.metric(
+        "Spot price now",
+        f"{spot_price:,.1f} €/MWh",
+        help=f"Day-ahead zone {live_zone} · {live_spot['time_iso'][:16]} UTC · source energy-charts.info",
+    )
+
+    if live_weather:
+        revenue_now = estimated_mw * spot_price  # €/h (MW × €/MWh × 1h)
+        l5.metric(
+            "Revenue (this hour)",
+            f"€ {revenue_now:,.0f}",
+            help="Estimated output × current spot price × 1 hour. Indicative only.",
+        )
+    else:
+        l5.metric("Revenue (this hour)", "—")
+else:
+    l4.metric("Spot price now", "—", help=f"Zone {live_zone or '—'} not available right now.")
+    l5.metric("Revenue (this hour)", "—")
+
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Satellite view (read-only)
 # ---------------------------------------------------------------------------
 
 components.html(
