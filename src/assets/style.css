@@ -162,3 +162,47 @@ hr {
   font-style: italic;
   margin-top: 2px;
 }
+
+/* Park header — sober card replacing emoji-heavy markdown */
+.park-header {
+  background: rgba(20, 27, 46, 0.55);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin: 8px 0 16px;
+}
+
+.park-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.park-meta {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.park-meta .dot {
+  margin: 0 8px;
+  color: #475569;
+}
+
+.park-meta a {
+  color: #7dd3fc;
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(125, 211, 252, 0.4);
+}
+
+.park-meta a:hover {
+  border-bottom-color: rgba(125, 211, 252, 0.8);
+}
+
+/* Wrapper around globe for atmospheric effect */
+.globe-wrapper {
+  position: relative;
+}
