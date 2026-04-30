@@ -43,7 +43,7 @@ parks:
     name: "Manzano Solar Park"
     country: IT
     technology: solar
-    coordinates: [45.9888, 13.3763]
+    coordinates: [46.0635, 13.2358]  # Manzano, Udine, Friuli-VG. Source GEM Wiki (approx) https://www.gem.wiki/Manzano_Udine_solar_farm_I
     capacity_mwp: 11.2
     commissioning_year: 2010
     operator: "IBC Solar (EPC + O&M)"
@@ -58,7 +58,7 @@ parks:
     name: "Centrale photovoltaïque SiSen"
     country: IT
     technology: solar
-    coordinates: [41.4622, 15.5447]  # Foggia, Pouilles — à raffiner
+    coordinates: [41.5604, 15.6922]  # San Giovanni Rotondo, Foggia, Pouilles. Source GEM Wiki (exact) https://www.gem.wiki/SiSen_solar_project
     capacity_mwp: 8
     commissioning_year: 2011
     operator: "Allianz Renewable Energy Fund I (AREF I)"
@@ -75,7 +75,7 @@ parks:
     name: "Central Solar Fotovoltaica Ourika"
     country: PT
     technology: solar
-    coordinates: [37.65, -8.22]  # Ourique, Beja, Alentejo — à raffiner
+    coordinates: [37.6570, -8.2001]  # Ourique, Beja, Alentejo. Source GEM Wiki (exact) https://www.gem.wiki/Ourique_solar_farm
     capacity_mwp: 46.1
     commissioning_year: 2018
     operator: "WElink Energy / China Triumph International Engineering"
@@ -107,7 +107,7 @@ parks:
     name: "Parc Solaire Lacs Médocains (section AREF II)"
     country: FR
     technology: solar
-    coordinates: [45.18, -1.05]  # Hourtin, Gironde — à raffiner
+    coordinates: [45.1993, -1.0277]  # Hourtin, Gironde. Source GEM Wiki https://www.gem.wiki/Lacs_M%C3%A9docains_solar_farm
     capacity_mwp: 9.4
     commissioning_year: 2018
     operator: "BayWa r.e."
@@ -124,7 +124,7 @@ parks:
     name: "Lotus Solar Farm"
     country: US
     technology: solar
-    coordinates: [36.95, -120.06]  # Madera County, Californie — à raffiner
+    coordinates: [36.9411, -119.9600]  # Madera County, Californie. Source GEM Wiki (exact) https://www.gem.wiki/Borden_solar_farm
     capacity_mwp: 67
     commissioning_year: 2020
     operator: "Avantus (ex-8minute Solar Energy)"
@@ -139,7 +139,7 @@ parks:
     name: "Galloway 2 Solar Project"
     country: US
     technology: solar
-    coordinates: [31.4462, -99.903]  # Concho County, Texas
+    coordinates: [31.4462, -99.9029]  # Paint Rock, Concho County, Texas. Source GEM Wiki (exact) https://www.gem.wiki/Galloway_2_solar_farm
     capacity_mwp: 147
     commissioning_year: 2023
     operator: "Avantus (minoritaire + asset management) / RES (EPC)"
@@ -156,7 +156,7 @@ parks:
     name: "Tabernas Solar PV Project"
     country: ES
     technology: solar
-    coordinates: [37.05, -2.39]  # Tabernas, Andalousie — à raffiner
+    coordinates: [37.0845, -2.3525]  # Tabernas, Almería, Andalousie. Source GEM Wiki (approx) https://www.gem.wiki/Tabernas_(Grenergy)_solar_farm
     capacity_mwp: 250
     commissioning_year: 2024
     operator: "Grenergy Renovables (EPC + O&M long-term)"
@@ -171,7 +171,7 @@ parks:
     name: "José Cabrera Solar Project"
     country: ES
     technology: solar
-    coordinates: [40.04, -3.24]  # Castille-La Manche — à raffiner
+    coordinates: [40.3541, -2.8954]  # Pastrana, Guadalajara, Castilla-La Mancha. Source GEM Wiki (exact) https://www.gem.wiki/José_Cabrera_(Grenergy)_solar_farm
     capacity_mwp: 47
     commissioning_year: 2024
     operator: "Grenergy Renovables"
