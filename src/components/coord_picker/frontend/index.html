@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #000;
+    font-family: -apple-system, "Inter", system-ui, sans-serif;
+  }
+  #map {
+    width: 100%; height: 100%;
+    border-radius: 10px;
+    cursor: crosshair;
+  }
+  .leaflet-control-attribution {
+    font-size: 9px !important;
+    background: rgba(0, 0, 0, 0.85) !important;
+    color: #a8a294 !important;
+    opacity: 0.6;
+  }
+  .leaflet-control-attribution a { color: #e8e4d6 !important; }
+  .leaflet-control-zoom a {
+    background: rgba(13, 13, 13, 0.92) !important;
+    color: #e8e4d6 !important;
+    border: 1px solid rgba(232, 228, 214, 0.18) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+  }
+  .leaflet-control-zoom a:hover {
+    background: rgba(20, 20, 20, 1) !important;
+  }
+  .hint-banner {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 800;
+    background: rgba(0, 0, 0, 0.85);
+    color: #e8e4d6;
+    border: 1px solid rgba(232, 228, 214, 0.25);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+  }
+  .hint-banner .hint-key { color: #84cc16; }
+  .leaflet-popup-content-wrapper {
+    background: rgba(0, 0, 0, 0.92) !important;
+    color: #e8e4d6 !important;
+    border: 1px solid rgba(132, 204, 22, 0.5) !important;
+    border-radius: 6px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 11px !important;
+  }
+  .leaflet-popup-tip { background: rgba(0, 0, 0, 0.92) !important; }
+  .leaflet-popup-close-button { color: #e8e4d6 !important; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="hint-banner"><span class="hint-key">▸ double-click</span> on the actual panels to save new coords</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // ----- Streamlit component protocol -------------------------------------
+  function sendToStreamlit(type, extra) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type }, extra || {}), "*");
+  }
+  function setReady() { sendToStreamlit("streamlit:componentReady", { apiVersion: 1 }); }
+  function setHeight(h) { sendToStreamlit("streamlit:setFrameHeight", { height: h }); }
+  function setValue(v) { sendToStreamlit("streamlit:setComponentValue", { value: v, dataType: "json" }); }
+
+  // ----- Map state ---------------------------------------------------------
+  let map = null;
+  let originalMarker = null;
+  let newMarker = null;
+  let lastLat, lastLng, lastLabel;
+
+  function buildMap(lat, lng, label) {
+    map = L.map('map', {
+      zoomControl: true,
+      attributionControl: true,
+      doubleClickZoom: false,  // we use dblclick for coord pick
+    }).setView([lat, lng], 15);
+
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 18, attribution: "Esri, Maxar, Earthstar Geographics" }
+    ).addTo(map);
+
+    drawOriginalMarker(lat, lng, label);
+
+    map.on("dblclick", (e) => {
+      const newLat = e.latlng.lat;
+      const newLng = e.latlng.lng;
+      drawNewMarker(newLat, newLng);
+      setValue([newLat, newLng]);
+    });
+  }
+
+  function drawOriginalMarker(lat, lng, label) {
+    if (originalMarker) {
+      originalMarker.forEach(m => map.removeLayer(m));
+    }
+    const ring = L.circleMarker([lat, lng], {
+      radius: 14, color: "#e8e4d6", weight: 2,
+      fillColor: "#e8e4d6", fillOpacity: 0.12,
+    }).addTo(map);
+    const dot = L.circleMarker([lat, lng], {
+      radius: 5, color: "#e8e4d6", weight: 2,
+      fillColor: "#e8e4d6", fillOpacity: 0.95,
+    }).addTo(map).bindPopup(label);
+    originalMarker = [ring, dot];
+  }
+
+  function drawNewMarker(lat, lng) {
+    if (newMarker) map.removeLayer(newMarker);
+    newMarker = L.circleMarker([lat, lng], {
+      radius: 14, color: "#84cc16", weight: 2,
+      fillColor: "#84cc16", fillOpacity: 0.45,
+    }).addTo(map).bindPopup(
+      `<b>New coords saved</b><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`
+    ).openPopup();
+  }
+
+  function onRender(args) {
+    const lat = args.lat;
+    const lng = args.lon;
+    const label = (args.label || "").replace(/[<>]/g, "");
+    const height = args.height || 360;
+
+    if (!map) {
+      buildMap(lat, lng, label);
+    } else if (lat !== lastLat || lng !== lastLng) {
+      // Park changed — re-center, redraw, drop new-marker
+      map.setView([lat, lng], 15);
+      drawOriginalMarker(lat, lng, label);
+      if (newMarker) { map.removeLayer(newMarker); newMarker = null; }
+    }
+    lastLat = lat; lastLng = lng; lastLabel = label;
+    setHeight(height);
+  }
+
+  window.addEventListener("message", (event) => {
+    if (!event.data || !event.data.type) return;
+    if (event.data.type === "streamlit:render") {
+      onRender(event.data.args || {});
+    }
+  });
+
+  setReady();
+  setHeight(360);
+</script>
+</body>
+</html>

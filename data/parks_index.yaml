@@ -156,7 +156,7 @@ parks:
     name: "Tabernas Solar PV Project"
     country: ES
     technology: solar
-    coordinates: [37.0845, -2.3525]  # Tabernas, Almería, Andalousie. Source GEM Wiki (approx) https://www.gem.wiki/Tabernas_(Grenergy)_solar_farm
+    coordinates: [37.05901, -2.30095]  # Tabernas, Almería, Andalousie. Source : user-verified via OSM Nominatim 2026-04-30
     capacity_mwp: 250
     commissioning_year: 2024
     operator: "Grenergy Renovables (EPC + O&M long-term)"

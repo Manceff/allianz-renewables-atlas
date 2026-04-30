@@ -22,6 +22,9 @@ import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
+import yaml
+
+from src.components.coord_picker import coord_picker
 from src.components.globe_picker import globe_picker
 from src.lib.parks_loader import load_parks_index
 from src.lib.pvgis_fetch import DEFAULT_REPRESENTATIVE_YEAR, fetch_pvgis_hourly
@@ -58,7 +61,24 @@ SEVERITY_LABELS = {
 }
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-DATA_YEAR = DEFAULT_REPRESENTATIVE_YEAR  # 2023, dernière année complète SARAH-3
+DATA_YEAR = DEFAULT_REPRESENTATIVE_YEAR  # 2020, latest stable in PVGIS-SARAH2
+
+COORD_OVERRIDES_PATH = _ROOT / "data" / "coord_overrides.yaml"
+
+
+def _load_coord_overrides() -> dict[str, list[float]]:
+    """Load user-curated coord overrides (set via dblclick on satellite view)."""
+    if not COORD_OVERRIDES_PATH.exists():
+        return {}
+    with open(COORD_OVERRIDES_PATH) as f:
+        return yaml.safe_load(f) or {}
+
+
+def _save_coord_override(park_id: str, lat: float, lon: float) -> None:
+    overrides = _load_coord_overrides()
+    overrides[park_id] = [round(float(lat), 6), round(float(lon), 6)]
+    with open(COORD_OVERRIDES_PATH, "w") as f:
+        yaml.safe_dump(overrides, f, default_flow_style=False, sort_keys=True)
 
 
 # ---------------------------------------------------------------------------
@@ -69,22 +89,27 @@ DATA_YEAR = DEFAULT_REPRESENTATIVE_YEAR  # 2023, dernière année complète SARA
 @st.cache_data
 def _load_parks_df() -> pd.DataFrame:
     idx = load_parks_index()
-    return pd.DataFrame(
-        [
+    overrides = _load_coord_overrides()
+    rows = []
+    for p in idx.parks:
+        lat, lon = p.lat, p.lon
+        if p.id in overrides:
+            lat, lon = overrides[p.id]
+        rows.append(
             {
                 "id": p.id,
                 "name": p.name,
                 "country": p.country,
-                "lat": p.lat,
-                "lon": p.lon,
+                "lat": lat,
+                "lon": lon,
                 "capacity_mwp": p.capacity_mwp or 0.0,
                 "commissioning_year": p.commissioning_year,
                 "operator": p.operator or "—",
                 "press_release_url": p.press_release_url,
+                "coord_overridden": p.id in overrides,
             }
-            for p in idx.parks
-        ]
-    )
+        )
+    return pd.DataFrame(rows)
 
 
 @st.cache_data
@@ -96,66 +121,6 @@ def _load_reported() -> dict[str, dict]:
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_hourly_cached(park_id: str, lat: float, lon: float, peakpower_mw: float) -> dict:
     return fetch_pvgis_hourly(lat=lat, lon=lon, peakpower_mw=peakpower_mw)
-
-
-# ---------------------------------------------------------------------------
-# Satellite view HTML — Leaflet + Esri World Imagery
-# ---------------------------------------------------------------------------
-
-
-def _build_satellite_html(lat: float, lon: float, label: str) -> str:
-    label_safe = label.replace("'", "&#39;").replace('"', "&quot;")
-    return f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<style>
-  html, body {{ margin: 0; padding: 0; height: 100%; background: #050810; }}
-  #map {{ width: 100%; height: 100%; border-radius: 10px; }}
-  .leaflet-control-attribution {{
-    font-size: 9px !important; opacity: 0.55;
-    background: rgba(5, 8, 16, 0.85) !important;
-    color: #94a3b8 !important;
-  }}
-  .leaflet-control-attribution a {{ color: #e8e4d6 !important; }}
-  .leaflet-control-zoom a {{
-    background: rgba(13, 19, 32, 0.92) !important;
-    color: #cbd5e1 !important;
-    border: 1px solid rgba(148, 163, 184, 0.18) !important;
-    font-family: 'JetBrains Mono', monospace !important;
-  }}
-  .leaflet-control-zoom a:hover {{
-    background: rgba(13, 19, 32, 1) !important;
-    color: #e8e4d6 !important;
-  }}
-</style>
-</head>
-<body>
-<div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-  const map = L.map('map', {{ zoomControl: true, attributionControl: true }})
-    .setView([{lat}, {lon}], 14);
-
-  L.tileLayer(
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
-    {{ maxZoom: 18, attribution: 'Esri, Maxar, Earthstar Geographics' }}
-  ).addTo(map);
-
-  L.circleMarker([{lat}, {lon}], {{
-    radius: 14, color: '#e8e4d6', weight: 2,
-    fillColor: '#e8e4d6', fillOpacity: 0.12,
-  }}).addTo(map).bindPopup('{label_safe}');
-  L.circleMarker([{lat}, {lon}], {{
-    radius: 5, color: '#e8e4d6', weight: 2,
-    fillColor: '#e8e4d6', fillOpacity: 0.95,
-  }}).addTo(map);
-</script>
-</body>
-</html>
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -273,15 +238,24 @@ st.markdown(
 # Satellite view
 # ---------------------------------------------------------------------------
 
-components.html(
-    _build_satellite_html(
-        lat=float(selected_row["lat"]),
-        lon=float(selected_row["lon"]),
-        label=selected_row["name"],
-    ),
-    height=320,
-    scrolling=False,
+new_coords = coord_picker(
+    lat=float(selected_row["lat"]),
+    lon=float(selected_row["lon"]),
+    label=selected_row["name"],
+    height=360,
+    key=f"coord-picker-{selected_park_id}",
 )
+
+if new_coords is not None and isinstance(new_coords, list) and len(new_coords) == 2:
+    new_lat, new_lon = float(new_coords[0]), float(new_coords[1])
+    current_lat, current_lon = float(selected_row["lat"]), float(selected_row["lon"])
+    # Save only if meaningful delta (>10 meters ≈ 0.0001°)
+    if abs(new_lat - current_lat) > 0.0001 or abs(new_lon - current_lon) > 0.0001:
+        _save_coord_override(selected_park_id, new_lat, new_lon)
+        # Invalidate caches : parks_df + PVGIS hourly (lat changed → cache key changes)
+        _load_parks_df.clear()
+        st.toast(f"Coords saved : {new_lat:.5f}, {new_lon:.5f}", icon="✓")
+        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Detail panel — fetch PVGIS and render
