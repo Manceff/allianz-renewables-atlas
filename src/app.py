@@ -24,8 +24,12 @@ import streamlit.components.v1 as components
 
 import yaml
 
-from src.components.coord_picker import coord_picker
 from src.components.globe_picker import globe_picker
+from src.lib.electricity_prices import (
+    compute_revenue_metrics,
+    fetch_hourly_prices,
+    get_zone,
+)
 from src.lib.parks_loader import load_parks_index
 from src.lib.pvgis_fetch import DEFAULT_REPRESENTATIVE_YEAR, fetch_pvgis_hourly
 from src.lib.reported_production import load_reported_production
@@ -121,6 +125,66 @@ def _load_reported() -> dict[str, dict]:
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_hourly_cached(park_id: str, lat: float, lon: float, peakpower_mw: float) -> dict:
     return fetch_pvgis_hourly(lat=lat, lon=lon, peakpower_mw=peakpower_mw)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_prices_cached(zone: str, year: int) -> list[float] | None:
+    return fetch_hourly_prices(zone, year)
+
+
+# ---------------------------------------------------------------------------
+# Satellite view HTML (read-only) — Leaflet + Esri World Imagery
+# ---------------------------------------------------------------------------
+
+
+def _build_satellite_html(lat: float, lon: float, label: str) -> str:
+    label_safe = label.replace("'", "&#39;").replace('"', "&quot;")
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body {{ margin: 0; padding: 0; height: 100%; background: #000; }}
+  #map {{ width: 100%; height: 100%; border-radius: 10px; }}
+  .leaflet-control-attribution {{
+    font-size: 9px !important; opacity: 0.55;
+    background: rgba(0, 0, 0, 0.85) !important;
+    color: #a8a294 !important;
+  }}
+  .leaflet-control-attribution a {{ color: #e8e4d6 !important; }}
+  .leaflet-control-zoom a {{
+    background: rgba(13, 13, 13, 0.92) !important;
+    color: #e8e4d6 !important;
+    border: 1px solid rgba(232, 228, 214, 0.18) !important;
+    font-family: 'JetBrains Mono', monospace !important;
+  }}
+  .leaflet-control-zoom a:hover {{ background: rgba(20, 20, 20, 1) !important; }}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map', {{ zoomControl: true, attributionControl: true }})
+    .setView([{lat}, {lon}], 14);
+  L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
+    {{ maxZoom: 18, attribution: 'Esri, Maxar, Earthstar Geographics' }}
+  ).addTo(map);
+  L.circleMarker([{lat}, {lon}], {{
+    radius: 14, color: '#e8e4d6', weight: 2,
+    fillColor: '#e8e4d6', fillOpacity: 0.12,
+  }}).addTo(map).bindPopup('{label_safe}');
+  L.circleMarker([{lat}, {lon}], {{
+    radius: 5, color: '#e8e4d6', weight: 2,
+    fillColor: '#e8e4d6', fillOpacity: 0.95,
+  }}).addTo(map);
+</script>
+</body>
+</html>
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +290,6 @@ st.markdown(
         <div class="stat stat-source">
           <div class="stat-label">Source</div>
           <div class="stat-value"><a href="{selected_row['press_release_url']}" target="_blank">press release ↗</a></div>
-          <div class="stat-value" style="margin-top:4px;"><a href="https://www.openstreetmap.org/?mlat={selected_row['lat']}&amp;mlon={selected_row['lon']}#map=15/{selected_row['lat']}/{selected_row['lon']}" target="_blank">verify coords on OSM ↗</a></div>
         </div>
       </div>
     </div>
@@ -238,24 +301,15 @@ st.markdown(
 # Satellite view
 # ---------------------------------------------------------------------------
 
-new_coords = coord_picker(
-    lat=float(selected_row["lat"]),
-    lon=float(selected_row["lon"]),
-    label=selected_row["name"],
+components.html(
+    _build_satellite_html(
+        lat=float(selected_row["lat"]),
+        lon=float(selected_row["lon"]),
+        label=selected_row["name"],
+    ),
     height=360,
-    key=f"coord-picker-{selected_park_id}",
+    scrolling=False,
 )
-
-if new_coords is not None and isinstance(new_coords, list) and len(new_coords) == 2:
-    new_lat, new_lon = float(new_coords[0]), float(new_coords[1])
-    current_lat, current_lon = float(selected_row["lat"]), float(selected_row["lon"])
-    # Save only if meaningful delta (>10 meters ≈ 0.0001°)
-    if abs(new_lat - current_lat) > 0.0001 or abs(new_lon - current_lon) > 0.0001:
-        _save_coord_override(selected_park_id, new_lat, new_lon)
-        # Invalidate caches : parks_df + PVGIS hourly (lat changed → cache key changes)
-        _load_parks_df.clear()
-        st.toast(f"Coords saved : {new_lat:.5f}, {new_lon:.5f}", icon="✓")
-        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Detail panel — fetch PVGIS and render
@@ -331,6 +385,47 @@ if reported:
     )
 else:
     m4.metric("Delta vs reported", "—", help="No public production figure available for this park.")
+
+# ----- Revenue metrics (electricity day-ahead price × hourly production) -----
+zone = get_zone(selected_row["country"], park_id=selected_park_id)
+revenue_metrics: dict = {}
+if zone:
+    prices = _fetch_prices_cached(zone, DATA_YEAR)
+    if prices:
+        revenue_metrics = compute_revenue_metrics(
+            hourly_production_kwh=hourly_data["hourly_production_kwh"],
+            hourly_prices_eur_mwh=prices,
+        )
+
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+r1, r2, r3, r4 = st.columns(4)
+
+if revenue_metrics:
+    r1.metric(
+        f"Revenue ({DATA_YEAR})",
+        f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
+        help=f"Hourly production × day-ahead price (zone {zone}). Source: energy-charts.info / ENTSO-E.",
+    )
+    r2.metric(
+        "Effective sale price",
+        f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
+        help="Production-weighted average price actually realised.",
+    )
+    r3.metric(
+        "Day-ahead avg price",
+        f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
+        help=f"Simple time-average of zone {zone} hourly prices in {DATA_YEAR}.",
+    )
+    r4.metric(
+        "Solar cannibalisation",
+        f"{revenue_metrics['cannibalization_pct']:+.1f} %",
+        help="(Effective − Day-ahead avg) / Day-ahead avg. Negative = solar produces more during low-price hours (typical).",
+    )
+else:
+    r1.metric(f"Revenue ({DATA_YEAR})", "—", help=f"Zone {zone or '—'} not available on energy-charts.info.")
+    r2.metric("Effective sale price", "—")
+    r3.metric("Day-ahead avg price", "—")
+    r4.metric("Solar cannibalisation", "—")
 
 # Source caption
 if reported:

@@ -1,2 +1,21 @@
-# Coord overrides modifiables via double-click sur la satellite view in-app.
-# Format: park_id: [lat, lon]
+elgin-ireland-191:
+- 53.776147
+- -7.13473
+galloway-2:
+- 31.452499
+- -99.881301
+grenergy-jose-cabrera:
+- 40.302964
+- -2.902193
+grenergy-tabernas:
+- 37.070211
+- -2.319918
+ourika:
+- 37.665376
+- -8.194084
+project-brindisi-portfolio:
+- 40.609587
+- 17.861924
+solara-4:
+- 37.378922
+- -7.69618

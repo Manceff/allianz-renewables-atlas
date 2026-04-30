@@ -14,12 +14,12 @@ import requests
 logger = logging.getLogger(__name__)
 
 PVGIS_PVCALC_URL = "https://re.jrc.ec.europa.eu/api/v5_2/PVcalc"
-PVGIS_SERIESCALC_URL = "https://re.jrc.ec.europa.eu/api/v5_2/seriescalc"
+PVGIS_SERIESCALC_URL = "https://re.jrc.ec.europa.eu/api/v5_3/seriescalc"  # v5.3 supporte SARAH-3 jusqu'à 2023
 
 DEFAULT_LOSS_PCT = 14.0  # pertes système standard PVGIS (câblage + onduleur + souillure)
 DEFAULT_PVTECH = "crystSi"
 DEFAULT_TIMEOUT_SEC = 30
-DEFAULT_REPRESENTATIVE_YEAR = 2020  # dernière année stable dans PVGIS-SARAH2 (couvre toutes les régions)
+DEFAULT_REPRESENTATIVE_YEAR = 2023  # dernière année dispo dans PVGIS-SARAH3 (publié 2024)
 
 
 class PvgisFetchError(RuntimeError):
