@@ -43,7 +43,7 @@ parks:
     name: "Manzano Solar Park"
     country: IT
     technology: solar
-    coordinates: [46.0635, 13.2358]  # Manzano, Udine, Friuli-VG. Source GEM Wiki (approx) https://www.gem.wiki/Manzano_Udine_solar_farm_I
+    coordinates: [45.9645, 13.3728]  # Manzano, Udine, Friuli-VG. Source OSM way 1304106680 (IBC Solar website tag confirmé, 11 MWp) https://www.openstreetmap.org/way/1304106680
     capacity_mwp: 11.2
     commissioning_year: 2010
     operator: "IBC Solar (EPC + O&M)"
@@ -75,7 +75,7 @@ parks:
     name: "Central Solar Fotovoltaica Ourika"
     country: PT
     technology: solar
-    coordinates: [37.6570, -8.2001]  # Ourique, Beja, Alentejo. Source GEM Wiki (exact) https://www.gem.wiki/Ourique_solar_farm
+    coordinates: [37.6560, -8.1990]  # Ourique, Beja, Alentejo. Source OSM "Central Solar da Herdade do Quintal" 50 MW (nom local du parc, polygon exact)
     capacity_mwp: 46.1
     commissioning_year: 2018
     operator: "WElink Energy / China Triumph International Engineering"
@@ -90,7 +90,7 @@ parks:
     name: "Solara 4 (Central Fotovoltaica Alcoutim)"
     country: PT
     technology: solar
-    coordinates: [37.365, -7.665]  # Vaqueiros, Alcoutim, Algarve. Source GEM Wiki (exact) https://www.gem.wiki/Riccardo_Totta_Solar_Plant
+    coordinates: [37.3947, -7.7043]  # Vaqueiros, Alcoutim, Algarve. Source OSM "Central Fotovoltaica Riccardo Totta" 220 MW (exact polygon) — corrige GEM Wiki à 5 km off
     capacity_mwp: 219
     commissioning_year: 2021  # signé 2018, retardé construction + COVID
     operator: "WElink Energy / China Triumph International Engineering"
@@ -107,7 +107,7 @@ parks:
     name: "Parc Solaire Lacs Médocains (section AREF II)"
     country: FR
     technology: solar
-    coordinates: [45.1993, -1.0277]  # Hourtin, Gironde. Source GEM Wiki https://www.gem.wiki/Lacs_M%C3%A9docains_solar_farm
+    coordinates: [45.2010, -1.0224]  # Hourtin, Gironde. Source OSM "Parc photovoltaïque des Lacs Médocains" 41.2 MW (polygon exact)
     capacity_mwp: 9.4
     commissioning_year: 2018
     operator: "BayWa r.e."

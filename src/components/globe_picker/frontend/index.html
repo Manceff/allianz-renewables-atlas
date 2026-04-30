@@ -7,7 +7,7 @@
     margin: 0;
     padding: 0;
     height: 100%;
-    background: #050810;
+    background: transparent;
     overflow: hidden;
     font-family: -apple-system, "Inter", system-ui, sans-serif;
   }
@@ -72,12 +72,12 @@
 
   function buildGlobe(parks, height) {
     const elem = document.getElementById("globeViz");
-    globe = Globe()(elem)
+    globe = Globe({ rendererConfig: { alpha: true, antialias: true } })(elem)
+      .backgroundColor("rgba(0,0,0,0)")  // transparent — let page bg show through
       .globeImageUrl("https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg")
       .bumpImageUrl("https://unpkg.com/three-globe/example/img/earth-topology.png")
-      .backgroundImageUrl("https://unpkg.com/three-globe/example/img/night-sky.png")
       .atmosphereColor("#7dd3fc")
-      .atmosphereAltitude(0.20)
+      .atmosphereAltitude(0.22)
       .pointsData(parks)
       .pointLat("lat")
       .pointLng("lng")
@@ -102,8 +102,6 @@
       .ringAltitude(0.003)
       .onPointClick(point => {
         if (point && point.id) {
-          // Stop auto-rotate when user clicks
-          globe.controls().autoRotate = false;
           // Smooth zoom + tilt to the selected park
           globe.pointOfView({ lat: point.lat, lng: point.lng, altitude: 1.6 }, 1200);
           // Send park_id back to Streamlit
@@ -114,8 +112,7 @@
     // Initial framing — Europe-centric
     globe.pointOfView({ lat: 38, lng: 4, altitude: 2.4 }, 0);
 
-    globe.controls().autoRotate = true;
-    globe.controls().autoRotateSpeed = 0.35;
+    globe.controls().autoRotate = false;       // user requested: no rotation
     globe.controls().enableZoom = true;
     globe.controls().minDistance = 200;
     globe.controls().maxDistance = 800;
