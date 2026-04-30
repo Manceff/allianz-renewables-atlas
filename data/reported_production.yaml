@@ -1,7 +1,7 @@
 # Production annuelle publiquement reportée pour les parcs solaires ACP.
-# Sources : press releases opérateurs / Allianz uniquement. Pas de scraping live.
+# Sources : press releases opérateurs / Allianz / trade press uniquement. Pas de scraping live.
 # Si une entrée n'a pas de source publique vérifiable, elle n'est PAS ajoutée
-# (mieux vaut 4 entrées vérifiées que 7 inventées).
+# (mieux vaut 6 entrées vérifiées que 11 inventées).
 #
 # Schéma par entrée :
 #   park_id : doit matcher un id de data/parks_index.yaml
@@ -14,22 +14,34 @@
   annual_mwh: 80000
   year: 2018
   source_url: "https://www.allianzcapitalpartners.com/media/news/102518-allianz-acquires-first-subsidy-free-solar-project-iberia/"
-  note: "Allianz PR + WElink PR mentionnent 23 000 foyers. 80 GWh/an cités explicitement par algarvedailynews.com 2018 (https://algarvedailynews.com/news/14745-boost-doubles-portugal-s-solar-production-capacity). Cohérent avec 23 000 foyers x ~3.5 MWh."
+  note: "Allianz PR + WElink PR mentionnent 23 000 foyers. 80 GWh/an cités explicitement par algarvedailynews.com 2018 (https://algarvedailynews.com/news/14745-boost-doubles-portugal-s-solar-production-capacity). Cohérent avec 23 000 foyers × ~3.5 MWh."
 
 - park_id: solara-4
   annual_mwh: 380000
   year: 2021
   source_url: "https://www.power-technology.com/data-insights/power-plant-profile-solara-4-vaqueiros-solar-pv-park-portugal/"
-  note: "COD septembre 2021. 380 000 MWh/an cités par power-technology data insights ; ~382 GWh/an confirmes par GEM Wiki (Riccardo_Totta_Solar_Plant). Plant renommee Riccardo Totta apres inauguration."
+  note: "COD septembre 2021. 380 000 MWh/an cités par power-technology data insights ; ~382 GWh/an confirmés par GEM Wiki (Riccardo_Totta_Solar_Plant). Plant renommée Riccardo Totta après inauguration."
 
 - park_id: manzano-solar
   annual_mwh: 13125
   year: 2011
   source_url: "https://www.pv-tech.org/ibc_solar_sells_11-2mw_italian_park_to_allianz_specialised_investments/"
-  note: "PV-Tech rapporte 3 750 foyers alimentes (cite IBC Solar). Conversion 3 750 x 3.5 MWh/foyer (moyenne EU) = 13 125 MWh/an. Pas de chiffre GWh explicite dans la source primaire."
+  note: "PV-Tech rapporte 3 750 foyers alimentés (cite IBC Solar). Conversion 3 750 × 3.5 MWh/foyer (moyenne EU) = 13 125 MWh/an. Cohérent avec l'estimation contractuelle 13 GWh mentionnée par Gemini deep research."
 
-- park_id: grenergy-spain-300
-  annual_mwh: 557100
-  year: 2025
+- park_id: sisen-foggia
+  annual_mwh: 12280
+  year: 2013
+  source_url: "https://www.infrappp.com/news/allianz-acquires-italian-photovoltaic-plant"
+  note: "12 280 MWh/an cités par InfraPPP (acquisition AREF I 2012-2013). Couvre besoins de 3 000 foyers Foggia, Pouilles."
+
+- park_id: grenergy-tabernas
+  annual_mwh: 466600
+  year: 2024
   source_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
-  note: "Portefeuille = Tabernas (250 MW, 466.6 GWh/an) + Jose Cabrera (47 MW, 90.5 GWh/an) = 297 MW total, 557.1 GWh/an. Production individuelle confirmee par lacerca.com (https://www.lacerca.com/noticias/guadalajara/grenergy-venta-plantas-mw-millones-euros-plusvalias-75-788573-1.html). Closing nov 2025."
+  note: "Composante Tabernas du méga-deal Grenergy 297 MW (270.6 M€). 466.6 GWh/an confirmés par lacerca.com (https://www.lacerca.com/noticias/guadalajara/grenergy-venta-plantas-mw-millones-euros-plusvalias-75-788573-1.html). Andalousie sud, COD H2 2024."
+
+- park_id: grenergy-jose-cabrera
+  annual_mwh: 90500
+  year: 2024
+  source_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
+  note: "Composante José Cabrera du méga-deal Grenergy. 90.5 GWh/an confirmés par lacerca.com. Castille-La Manche, COD H2 2024."

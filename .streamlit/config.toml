@@ -1,9 +1,10 @@
 [theme]
-# Palette Allianz : bleu institutionnel + accent vert renouvelables
-primaryColor = "#003781"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F4F6FA"
-textColor = "#1E1E1E"
+# JARVIS / Tesla console / Apple Vision Pro vibe — dark + cyan calme
+base = "dark"
+primaryColor = "#7dd3fc"
+backgroundColor = "#0a0e1a"
+secondaryBackgroundColor = "#141b2e"
+textColor = "#e2e8f0"
 font = "sans serif"
 
 [browser]

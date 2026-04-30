@@ -3,88 +3,39 @@
 from __future__ import annotations
 
 
-def test_methodology_page_renders():
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file("src/pages/5_📐_Methodology.py").run()
-    assert not at.exception
-
-
-def test_portfolio_sweep_page_renders():
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file("src/pages/2_📊_Portfolio_Sweep.py").run()
-    assert not at.exception
-
-
-def test_ourika_monograph_renders(monkeypatch):
-    """Smoke test page Monograph. Stub PVGIS pour éviter le hit réseau."""
-    from src.lib import confidence_interval as ci_mod
-    from src.lib.schemas import ConfidenceInterval, LossScenario
-    from streamlit.testing.v1 import AppTest
-
-    def _fake_compute_pvgis_range(
-        lat: float, lon: float, peakpower_mw: float, loss_scenarios=(10.0, 14.0, 18.0)
-    ) -> ConfidenceInterval:
-        # Valeurs proches de l'ordre de grandeur Ourika (≈73-77 GWh/an).
-        scenarios = [
-            LossScenario(loss_pct=10.0, annual_kwh=77_000_000.0),
-            LossScenario(loss_pct=14.0, annual_kwh=73_500_000.0),
-            LossScenario(loss_pct=18.0, annual_kwh=70_000_000.0),
-        ]
-        return ConfidenceInterval(
-            low_mwh=70_000.0,
-            mid_mwh=73_500.0,
-            high_mwh=77_000.0,
-            scenarios=scenarios,
-        )
-
-    monkeypatch.setattr(ci_mod, "compute_pvgis_range", _fake_compute_pvgis_range)
-
-    at = AppTest.from_file("src/pages/3_🔬_Ourika_Monograph.py").run(timeout=30)
-    assert not at.exception
-
-
-def test_globe_renders_default():
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file("src/pages/1_🌍_Globe.py").run()
-    assert not at.exception
-
-
-def test_globe_renders_severity_mode():
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file("src/pages/1_🌍_Globe.py").run()
-    radios = at.radio
-    if radios:
-        radios[0].set_value("Delta severity").run()
-    assert not at.exception
-
-
-def test_ic_snapshot_page_renders():
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file("src/pages/4_📈_IC_Snapshot.py").run(timeout=20)
-    assert not at.exception
-
-
-def test_about_page_renders():
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file("src/pages/7_ℹ️_About.py").run()
-    assert not at.exception
-
-
-def test_spotlight_page_renders():
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file("src/pages/6_📍_Spotlight.py").run()
-    assert not at.exception
-
-
 def test_app_entry_renders():
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_file("src/app.py").run()
+    assert not at.exception
+
+
+def test_atlas_renders_default(monkeypatch):
+    """Atlas page — stub PVGIS pour éviter les hits réseau."""
+    from src.lib import confidence_interval as ci_mod
+    from src.lib.schemas import ConfidenceInterval, LossScenario
+    from streamlit.testing.v1 import AppTest
+
+    def _fake_range(lat, lon, peakpower_mw, loss_scenarios=(10.0, 14.0, 18.0)):
+        scenarios = [
+            LossScenario(loss_pct=lp, annual_kwh=peakpower_mw * 1500 * (1 - lp / 100) * 1000)
+            for lp in loss_scenarios
+        ]
+        return ConfidenceInterval(
+            low_mwh=peakpower_mw * 1500 * 0.82,
+            mid_mwh=peakpower_mw * 1500 * 0.86,
+            high_mwh=peakpower_mw * 1500 * 0.90,
+            scenarios=scenarios,
+        )
+
+    monkeypatch.setattr(ci_mod, "compute_pvgis_range", _fake_range)
+
+    at = AppTest.from_file("src/pages/1_🌍_Atlas.py").run(timeout=30)
+    assert not at.exception
+
+
+def test_methodology_page_renders():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("src/pages/2_📐_Methodology.py").run()
     assert not at.exception

@@ -1,86 +1,43 @@
-# Master index des parcs Renewables Allianz Capital Partners publiquement identifiables.
-# Phase 1 Cartographie : 23 parcs validés depuis press releases ACP / Allianz / opérateurs partenaires.
-# Voir data/UNCERTAIN.md pour les pistes non confirmées (coords / capacité manquantes).
+# Master index des parcs SOLAIRES PV d'Allianz Capital Partners (ACP / AllianzGI Infrastructure)
+# publiquement identifiables, période 2010-2026.
+#
+# Périmètre : equity direct (Sponsor Equity) ou propriété majoritaire identifiée.
+# Hors périmètre : éolien, batteries, hydro, transmission, fonds infrastructure tiers
+# où les actifs sous-jacents ne sont pas nommés.
 #
 # Schéma par parc :
 #   id: slug-unique
 #   name: nom canonique
-#   country: code ISO 3166-1 alpha-2 (ou label complet)
-#   technology: solar | onshore_wind | offshore_wind | battery_storage
+#   country: code ISO 3166-1 alpha-2
+#   technology: solar (toujours, dans cette V1 solar-only)
 #   coordinates: [lat, lon]
-#   capacity_mwp: float (MWp pour solar, MW pour wind/BESS)
+#   capacity_mwp: float (MWp)
 #   commissioning_year: int
-#   operator: nom de l'opérateur partenaire
+#   operator: nom du développeur / opérateur partenaire
 #   allianz_stake_pct: float (null si non public)
-#   acquisition_year: int (année où ACP a acquis)
-#   press_release_url: URL canonique du communiqué ACP
-#   notes: optionnel
-#   has_pvgis_estimate: bool (true pour solaires only)
-#   has_reported_production: bool (true si l'opérateur publie sa production annuelle)
+#   acquisition_year: int
+#   press_release_url: URL canonique
+#   notes: contexte deal
+#   has_pvgis_estimate: bool
+#   has_reported_production: bool
 
 parks:
-  # === SOLAIRE (pipeline analytique complet pour les sites avec coords précises) ===
+  # === ITALIE — Marché historique 2010-2013 ===
 
-  - id: ourika
-    name: "Ourika Solar Park"
-    country: PT
-    technology: solar
-    coordinates: [37.65, -8.22]  # Ourique, Beja District, Alentejo — à raffiner
-    capacity_mwp: 46
-    commissioning_year: 2018
-    operator: "WElink Energy"
-    allianz_stake_pct: 100
-    acquisition_year: 2018
-    press_release_url: "https://www.allianzcapitalpartners.com/media/news/102518-allianz-acquires-first-subsidy-free-solar-project-iberia/"
-    notes: "Premier parc subsidy-free d'Iberia. 80 GWh/an commissioning, alimente 23 000 foyers."
-    has_pvgis_estimate: true
-    has_reported_production: true
-
-  - id: solara-4
-    name: "Solara 4"
-    country: PT
-    technology: solar
-    coordinates: [37.3468, -7.6956]  # Vaqueiros, Alcoutim, Algarve. Source : https://www.power-technology.com/data-insights/power-plant-profile-solara-4-vaqueiros-solar-pv-park-portugal/
-    capacity_mwp: 219
-    commissioning_year: 2019
-    operator: "WElink + China Triumph International Engineering"
-    allianz_stake_pct: 100
-    acquisition_year: 2018
-    press_release_url: "https://www.allianzcapitalpartners.com/media/news/121818-allianz-acquire-largest-subsidy-free-solar-project-portugal/"
-    notes: "Plus grand parc subsidy-free du Portugal au moment de l'acquisition. Renommé Riccardo Totta PV Plant à l'inauguration. 661 500 panneaux sur 320 ha aux paroisses de Vaqueiros et Martim Longo (Alcoutim)."
-    has_pvgis_estimate: true
-    has_reported_production: false  # à vérifier
-
-  - id: grenergy-spain-300
-    name: "Grenergy 300 MW Spain Portfolio"
-    country: ES
-    technology: solar
-    coordinates: [40.0, -3.7]  # Spain centre, multi-sites — à raffiner par site
-    capacity_mwp: 300
-    commissioning_year: 2025
-    operator: "Grenergy Renovables"
-    allianz_stake_pct: 100
-    acquisition_year: 2025
-    press_release_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
-    notes: "270M€ deal value. Multi-sites Espagne."
-    has_pvgis_estimate: true
-    has_reported_production: false
-
-  - id: brindisi
-    name: "Brindisi Solar"
+  - id: project-brindisi-portfolio
+    name: "Project Brindisi Portfolio (10 sites <1 MW)"
     country: IT
     technology: solar
-    coordinates: [40.63, 17.94]  # Brindisi, Apulia — à raffiner
-    capacity_mwp: null  # capacité non sourcée publiquement (cf. data/UNCERTAIN.md)
+    coordinates: [40.6383, 17.9350]  # Brindisi / Mesagne, Pouilles
+    capacity_mwp: 7.2
     commissioning_year: 2010
-    operator: "à rechercher"
-    allianz_stake_pct: null
+    operator: "Elements Green (développeur initial)"
+    allianz_stake_pct: 100
     acquisition_year: 2010
-    press_release_url: "à rechercher dans archives Allianz 2010"
-    notes: "Premier investissement solaire d'Allianz Specialised Investments en 2010. Capacité non confirmée par source publique : exclu du portfolio sweep (PVGIS)."
+    press_release_url: "https://www.bluefield.eu/news/bluefield-revive-italia-acquires-acp-italian-portfolio"
+    notes: "Premier investissement solaire ACP S1 2010. Portefeuille de 10 petites centrales <1 MWp construites 2009-2010 sous Conto Energia (autorisation simplifiée DIA). Vendu en 2023 à Bluefield Revive Italia I Srl. Conservé pour traçabilité historique."
     has_pvgis_estimate: true
     has_reported_production: false
-    excluded_from_sweep: true
 
   - id: manzano-solar
     name: "Manzano Solar Park"
@@ -89,11 +46,92 @@ parks:
     coordinates: [45.9888, 13.3763]
     capacity_mwp: 11.2
     commissioning_year: 2010
-    operator: "IBC Solar (O&M)"
+    operator: "IBC Solar (EPC + O&M)"
     allianz_stake_pct: 100
-    acquisition_year: 2011
+    acquisition_year: 2010
     press_release_url: "https://www.pv-tech.org/ibc_solar_sells_11-2mw_italian_park_to_allianz_specialised_investments/"
-    notes: "Grid-connected 7 Dec 2010, sold by IBC Solar to Allianz Specialised Investments early 2011. 47 000 polycrystalline + 3 600 thin-film modules sur 32 ha à Manzano (Udine, Friuli-VG). ~13 GWh/an. Source : PV-Tech."
+    notes: "Grid-connected 7 déc 2010, acquis par Allianz Specialised Investments. 47 000 modules polycrystalline + 3 600 thin-film sur 32 ha, Manzano (Udine, Frioul-VG). ~13 GWh/an. Évolution technologique vs Brindisi : utility-scale unique."
+    has_pvgis_estimate: true
+    has_reported_production: true
+
+  - id: sisen-foggia
+    name: "Centrale photovoltaïque SiSen"
+    country: IT
+    technology: solar
+    coordinates: [41.4622, 15.5447]  # Foggia, Pouilles — à raffiner
+    capacity_mwp: 8
+    commissioning_year: 2011
+    operator: "Allianz Renewable Energy Fund I (AREF I)"
+    allianz_stake_pct: 100
+    acquisition_year: 2013
+    press_release_url: "https://www.infrappp.com/news/allianz-acquires-italian-photovoltaic-plant"
+    notes: "Acquis via le premier fonds AREF I entre fin 2012 et mi-2013. Foggia, Pouilles. Acquisition emblématique du modèle ACP : risque réglementaire italien (décret Spalma-Incentivi) intégré dans la valorisation. ~12 280 MWh/an, alimente 3 000 foyers."
+    has_pvgis_estimate: true
+    has_reported_production: true
+
+  # === PORTUGAL — Première vague subsidy-free 2018 ===
+
+  - id: ourika
+    name: "Central Solar Fotovoltaica Ourika"
+    country: PT
+    technology: solar
+    coordinates: [37.65, -8.22]  # Ourique, Beja, Alentejo — à raffiner
+    capacity_mwp: 46.1
+    commissioning_year: 2018
+    operator: "WElink Energy / China Triumph International Engineering"
+    allianz_stake_pct: 100
+    acquisition_year: 2018
+    press_release_url: "https://www.allianzcapitalpartners.com/media/news/102518-allianz-acquires-first-subsidy-free-solar-project-iberia/"
+    notes: "JALON HISTORIQUE : premier parc solaire de grande envergure subsidy-free en péninsule ibérique. 142 000 panneaux sur 100 ha. PPA corporate 20 ans à prix fixe. ~80 GWh/an, 23 000 foyers."
+    has_pvgis_estimate: true
+    has_reported_production: true
+
+  - id: solara-4
+    name: "Solara 4 (Central Fotovoltaica Alcoutim)"
+    country: PT
+    technology: solar
+    coordinates: [37.3468, -7.6956]  # Vaqueiros, Alcoutim, Algarve
+    capacity_mwp: 219
+    commissioning_year: 2021  # signé 2018, retardé construction + COVID
+    operator: "WElink Energy / China Triumph International Engineering"
+    allianz_stake_pct: 100
+    acquisition_year: 2018
+    press_release_url: "https://www.allianzcapitalpartners.com/media/news/121818-allianz-acquire-largest-subsidy-free-solar-project-portugal/"
+    notes: "Méga-projet 800 ha, 661 500 panneaux. Renommé Riccardo Totta PV Plant à l'inauguration. Initialement prévu 2019, inauguré octobre 2021 (retards construction + COVID). Conçu pour 100 000 foyers. Consolide partenariat ACP-WElink."
+    has_pvgis_estimate: true
+    has_reported_production: true
+
+  # === FRANCE — Acquisition tactique 2018 ===
+
+  - id: lacs-medocains-arefii
+    name: "Parc Solaire Lacs Médocains (section AREF II)"
+    country: FR
+    technology: solar
+    coordinates: [45.18, -1.05]  # Hourtin, Gironde — à raffiner
+    capacity_mwp: 9.4
+    commissioning_year: 2018
+    operator: "BayWa r.e."
+    allianz_stake_pct: 100
+    acquisition_year: 2018
+    press_release_url: "https://www.pv-tech.org/baywa-r-e-sells-french-pv-portfolio-to-sonnedix-allianz/"
+    notes: "Découpe chirurgicale : BayWa r.e. a vendu un parc de 41.2 MW en 4 sections. Sonnedix a pris 3 sections (31.8 MW), AREF II a pris la 4e (~9.4 MW). Hourtin, nord-ouest Bordeaux. Démontre la flexibilité des fonds thématiques d'ACP."
+    has_pvgis_estimate: true
+    has_reported_production: false
+
+  # === USA — Tax equity + Sponsor equity 2019-2022 ===
+
+  - id: lotus-solar-farm
+    name: "Lotus Solar Farm"
+    country: US
+    technology: solar
+    coordinates: [36.95, -120.06]  # Madera County, Californie — à raffiner
+    capacity_mwp: 67
+    commissioning_year: 2020
+    operator: "Avantus (ex-8minute Solar Energy)"
+    allianz_stake_pct: 100
+    acquisition_year: 2019
+    press_release_url: "https://www.cpuc.ca.gov/-/media/cpuc-website/files/uploadedfiles/cpucwebsite/content/news_room/news_releases/2019/lotus-solar-acquisition.pdf"
+    notes: "Acquisition Sept 2019 via AllianzGI. 375 acres de pâturage à faible productivité agricole. Comté de Madera, Californie (CAISO). Premier deal californien d'AllianzGI ; tremplin du partenariat avec 8minute (devenue Avantus)."
     has_pvgis_estimate: true
     has_reported_production: false
 
@@ -101,285 +139,71 @@ parks:
     name: "Galloway 2 Solar Project"
     country: US
     technology: solar
-    coordinates: [31.4462, -99.903]
-    capacity_mwp: 147.0
+    coordinates: [31.4462, -99.903]  # Concho County, Texas
+    capacity_mwp: 147
     commissioning_year: 2023
-    operator: "Avantus"
-    allianz_stake_pct: null
+    operator: "Avantus (minoritaire + asset management) / RES (EPC)"
+    allianz_stake_pct: null  # majoritaire, % non disclosé
     acquisition_year: 2022
     press_release_url: "https://avantus.com/news/avantus-and-allianz-capital-partners-announce-completion-of-sale-for-galloway-2-solar-project"
-    notes: "Concho County, Paint Rock TX. ACP majority stake; Avantus retained minority + asset management. Sale closed Nov 2022, COD 2023. Source canonique opérateur (pas de press release ACP publique)."
+    notes: "Concho County, Paint Rock TX (réseau ERCOT). ACP = Sponsor Equity majoritaire ; Tax Equity par Tenaska ; dette construction par CIT Bank. ~60 000 personnes alimentées, 18 M$ de taxes locales. Closing nov 2022, COD 2023."
     has_pvgis_estimate: true
     has_reported_production: false
+
+  # === ESPAGNE — Méga-deal Grenergy 2023 (split en 2 actifs) ===
+
+  - id: grenergy-tabernas
+    name: "Tabernas Solar PV Project"
+    country: ES
+    technology: solar
+    coordinates: [37.05, -2.39]  # Tabernas, Andalousie — à raffiner
+    capacity_mwp: 250
+    commissioning_year: 2024
+    operator: "Grenergy Renovables (EPC + O&M long-term)"
+    allianz_stake_pct: 100
+    acquisition_year: 2023
+    press_release_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
+    notes: "Composante principale du portefeuille Grenergy 297 MW (270.6 M€). Andalousie sud, irradiation excellente. Grenergy conserve les early revenues jusqu'à closing financier juin 2025 + responsabilité O&M long-term. COD H2 2024."
+    has_pvgis_estimate: true
+    has_reported_production: true
+
+  - id: grenergy-jose-cabrera
+    name: "José Cabrera Solar Project"
+    country: ES
+    technology: solar
+    coordinates: [40.04, -3.24]  # Castille-La Manche — à raffiner
+    capacity_mwp: 47
+    commissioning_year: 2024
+    operator: "Grenergy Renovables"
+    allianz_stake_pct: 100
+    acquisition_year: 2023
+    press_release_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
+    notes: "Actif satellite du portefeuille Grenergy. Castille-La Manche centre. A bénéficié d'une ligne de financement vert dédiée 175 M€ avant intégration Allianz."
+    has_pvgis_estimate: true
+    has_reported_production: true
+
+  # === IRLANDE — RESS-secured 2023 ===
 
   - id: elgin-ireland-191
     name: "Elgin Ireland Solar Portfolio (16 sites)"
     country: IE
     technology: solar
-    coordinates: [53.77, -7.16]
-    capacity_mwp: 191.0
+    coordinates: [53.77, -7.16]  # centroïde portefeuille, sites multiples
+    capacity_mwp: 191
     commissioning_year: 2025
-    operator: "Elgin Energy"
-    allianz_stake_pct: null
+    operator: "Elgin Energy Services Limited"
+    allianz_stake_pct: 100
     acquisition_year: 2023
     press_release_url: "https://www.elgin.com/news/elgin-energy-celebrates-milestone-portfolio-sale"
-    notes: "Portefeuille de 16 sites solaires en Irlande (14 RESS-2, 2 RESS-3). Coords = Oldcastle, Co. Meath (site nommé) en proxy portefeuille ; aussi Edgeworthstown (Longford) et Kilmacthomas (Waterford). Énergisation 2024-2025. ~300M€. Source canonique opérateur (pas de PR ACP)."
+    notes: "Une des plus grosses transactions solaires irlandaises en capacité. 16 projets distribués (14 RESS-2, 2 RESS-3 — revenus sécurisés par contrats d'État). Forward sale signée déc 2023, energisation échelonnée 2024-2025. Elgin reste asset manager + EPC."
     has_pvgis_estimate: true
     has_reported_production: false
 
-  # === ONSHORE WIND (visuel + métadonnées only en v1) ===
-
-  - id: dahme
-    name: "Dahme Wind Farm"
-    country: DE
-    technology: onshore_wind
-    coordinates: [51.87, 13.42]  # Dahme, Brandenburg — à raffiner
-    capacity_mwp: 76
-    commissioning_year: 2013
-    operator: "à rechercher"
-    allianz_stake_pct: null
-    acquisition_year: 2013
-    press_release_url: "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html"
-    notes: "80 km au sud de Berlin. Acquis 2013 dans le cadre du programme 400M€ renewables ACP."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: erchie
-    name: "Erchie Wind Farm"
-    country: IT
-    technology: onshore_wind
-    coordinates: [40.45, 17.79]  # Erchie, Apulia — à raffiner
-    capacity_mwp: 30
-    commissioning_year: 2013
-    operator: "à rechercher"
-    allianz_stake_pct: null
-    acquisition_year: 2013
-    press_release_url: "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html"
-    notes: "Acquis 2013 dans portfolio européen ACP"
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: enertrag-poland
-    name: "Enertrag Poland Portfolio"
-    country: PL
-    technology: onshore_wind
-    coordinates: [52.0, 21.0]  # Pologne — à raffiner par parc spécifique
-    capacity_mwp: null  # multiple parks
-    commissioning_year: 2010
-    operator: "Enertrag"
-    allianz_stake_pct: null
-    acquisition_year: 2010
-    press_release_url: "https://www.allianz.com/en/mediacenter/news/financials/stakes_investments/201007_Allianz-Enertrag-renewable-energy-installations-Poland.html"
-    notes: "Premiers investissements ACP en Pologne. Plusieurs parcs combinés. Voir aussi dargikowo + karlino (sous-actifs précis du projet Dunowo)."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: france-2013-portfolio
-    name: "France 2013 Wind Portfolio"
-    country: FR
-    technology: onshore_wind
-    coordinates: [46.5, 2.5]  # France centre — à raffiner par parc
-    capacity_mwp: 64  # 5 parks combined
-    commissioning_year: 2013
-    operator: "à rechercher (5 parcs distincts)"
-    allianz_stake_pct: null
-    acquisition_year: 2013
-    press_release_url: "https://www.allianz.com/en/press/news/commitment/environment/news-2014-01-20.html"
-    notes: "5 parcs éoliens combinés acquis en 2013"
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: calau-ii
-    name: "Calau II (C+D) Wind Farm"
-    country: DE
-    technology: onshore_wind
-    coordinates: [51.7428, 13.9633]
-    capacity_mwp: 30.8
-    commissioning_year: 2014
-    operator: "PNE WIND AG (developer)"
-    allianz_stake_pct: 100
-    acquisition_year: 2014
-    press_release_url: "https://www.pnewind.com/en/info-center-news-en/438-pne-wind-ag-calau-ii-d-wind-farm-commissioned-and-handed-over-to-allianz/"
-    notes: "Phases C+D du parc forestier Calau II en Oberspreewald-Lausitz, Brandenburg. Vendu par PNE WIND au fonds renewables ACP en 2014. 10 x Vestas V112/3.0 MW. Coords thewindpower.net (id 16461). Source canonique opérateur."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: forterre
-    name: "La Forterre Wind Farm"
-    country: FR
-    technology: onshore_wind
-    coordinates: [47.6554, 3.4534]
-    capacity_mwp: 28
-    commissioning_year: 2014
-    operator: "RES (Renewable Energy Systems)"
-    allianz_stake_pct: 100
-    acquisition_year: 2014
-    press_release_url: "https://www.allianz.com/en/press/news/financials/stakes_investments/141110-investment-in-renewable-energy-exceeds-two-billion.html"
-    notes: "14 x Vestas V100/2.0 MW sur les Plateaux de Bourgogne, communes Ouanne et Merry-Sec, Yonne (89). Acquisition française phare 2014 ACP citée dans le communiqué milestone 2 Md€. Coords thewindpower.net (id 21504)."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: maevaara
-    name: "Maevaara Wind Farm"
-    country: SE
-    technology: onshore_wind
-    coordinates: [66.8791, 23.3859]
-    capacity_mwp: 105
-    commissioning_year: 2015
-    operator: "OX2"
-    allianz_stake_pct: 100
-    acquisition_year: 2013
-    press_release_url: "https://www.allianzcapitalpartners.com/en/media/news/060513-allianz-acquires-wind-farm-sweden"
-    notes: "Premier deal construction-loan-puis-equity ACP en Suède. Phase 1 (72 MW) commissioning avril 2015 ; Phase 2 (33 MW) closing 2016. Électricité vendue à Google sous PPA. Coords gem.wiki (Maevaara_wind_farm)."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: jouttikallio
-    name: "Jouttikallio Wind Park"
-    country: FI
-    technology: onshore_wind
-    coordinates: [62.9288, 23.0595]
-    capacity_mwp: 21
-    commissioning_year: 2017
-    operator: "OX2"
-    allianz_stake_pct: 100
-    acquisition_year: 2016
-    press_release_url: "https://www.ox2.com/newsroom/press-releases-news/2017/successful-inauguration-of-the-jouttikallio-wind-farm-in-finland/"
-    notes: "Premier parc éolien Allianz en Finlande (signature jan 2016, inauguration 2017). 6 x Vestas V126 à Lapua, ~80 km de Vaasa. Coords thewindpower.net (id 24972). Source canonique opérateur (PR ACP archive 404)."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: dargikowo
-    name: "Dargikowo Wind Farm (Dunowo project)"
-    country: PL
-    technology: onshore_wind
-    coordinates: [54.0158, 16.0632]
-    capacity_mwp: 133.0
-    commissioning_year: 2022
-    operator: "ENERTRAG"
-    allianz_stake_pct: 100.0
-    acquisition_year: 2020
-    press_release_url: "https://www.allianz.com/en/mediacenter/news/financials/stakes_investments/201007_Allianz-Enertrag-renewable-energy-installations-Poland.html"
-    notes: "Premier investissement equity renouvelables ACP en Pologne (oct 2020). 43 turbines, partie du projet Dunowo (Dargikowo + Karlino = 186 MW). Sources : Allianz PR + GEM Wiki."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: karlino
-    name: "Karlino Wind Farm (Dunowo project)"
-    country: PL
-    technology: onshore_wind
-    coordinates: [54.0410, 15.8793]
-    capacity_mwp: 53.0
-    commissioning_year: 2022
-    operator: "ENERTRAG"
-    allianz_stake_pct: 100.0
-    acquisition_year: 2020
-    press_release_url: "https://www.allianz.com/en/mediacenter/news/financials/stakes_investments/201007_Allianz-Enertrag-renewable-energy-installations-Poland.html"
-    notes: "16 turbines ; co-acquis avec Dargikowo oct 2020. Inauguré sept 2022 dans le cadre du projet Dunowo. Sources : Allianz PR + GEM Wiki."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  # === OFFSHORE WIND (Sentinel-1 SAR pour visuel, pas de production estimée v1) ===
-
-  - id: galloper
-    name: "Galloper Offshore Wind Farm"
-    country: GB
-    technology: offshore_wind
-    coordinates: [52.05, 1.95]  # 27 km off Suffolk coast — à raffiner
-    capacity_mwp: 353
-    commissioning_year: 2018
-    operator: "RWE (operator) + co-investors"
-    allianz_stake_pct: 25
-    acquisition_year: 2018
-    press_release_url: "à rechercher"
-    notes: "Co-détention RWE + ACP + Macquarie + Siemens. 27 km off Suffolk."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: empire-wind-1
-    name: "Empire Wind 1"
-    country: US
-    technology: offshore_wind
-    coordinates: [40.55, -73.50]  # 24 km off NY coast — à raffiner
-    capacity_mwp: 810
-    commissioning_year: 2026  # en construction
-    operator: "Equinor + BP"
-    allianz_stake_pct: null  # à confirmer
-    acquisition_year: 2020
-    press_release_url: "à rechercher"
-    notes: "En construction. 24 km off New York. Stake ACP à confirmer publiquement."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: hollandse-kust-zuid
-    name: "Hollandse Kust Zuid"
-    country: NL
-    technology: offshore_wind
-    coordinates: [52.30, 4.20]
-    capacity_mwp: 1509.0
-    commissioning_year: 2023
-    operator: "Vattenfall"
-    allianz_stake_pct: 25.2
-    acquisition_year: 2021
-    press_release_url: "https://www.allianz.com/en/mediacenter/news/business/asset_management/211206_Allianz-to-invest-in-offshore-wind-farm-in-Netherlands-for-first-time.html"
-    notes: "Premier investissement offshore wind ACP. 25.2% acheté à BASF déc 2021 ; co-détenu avec Vattenfall (51%) et BASF. Coords = centroid approx. zone HKZ, mer du Nord ~22 km au large de Noordwijk."
-    has_pvgis_estimate: false
-    has_reported_production: true
-
-  - id: he-dreiht
-    name: "He Dreiht Offshore Wind Farm"
-    country: DE
-    technology: offshore_wind
-    coordinates: [54.365, 6.186]
-    capacity_mwp: 960.0
-    commissioning_year: 2026
-    operator: "EnBW"
-    allianz_stake_pct: 16.6
-    acquisition_year: 2023
-    press_release_url: "https://www.allianzcapitalpartners.com/en/media/news/032323-allianz-to-invest-in-960mw-offshore-wind-farm-hedreiht-in-the-german-north-sea"
-    notes: "ACP a acquis 16.6% (consortium 49.9% avec NBIM + AIP) ; ~85-95 km au large de Borkum, mer du Nord allemande. 64 x SG 15 MW. Source : ACP press release mars 2023 ; coords thewindpower.net."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  - id: iles-yeu-noirmoutier
-    name: "Iles d'Yeu et Noirmoutier Offshore Wind Farm"
-    country: FR
-    technology: offshore_wind
-    coordinates: [46.870, -2.510]
-    capacity_mwp: 496.0
-    commissioning_year: 2026
-    operator: "Ocean Winds (EDPR + ENGIE)"
-    allianz_stake_pct: 20.25
-    acquisition_year: 2025
-    press_release_url: "https://www.allianzgi.com/en/press-centre/media/press-releases/20260122-allianz-invests-in-the-500mw-french-offshore-wind-farm-iles-dyeu-et-noirmoutier"
-    notes: "AllianzGI a acquis 20.25% à Ocean Winds (signature oct 2025, closing janv 2026). 200M€. 62 x SGRE D8 au large de la Vendée. First power juin 2025 ; full COD Q1 2026. Source : AllianzGI press release janv 2026 ; coords thewindpower.net."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-  # === BATTERY STORAGE (nouvelle section Phase 1) ===
-
-  - id: totalenergies-kyon-bess
-    name: "TotalEnergies/Kyon German BESS Portfolio (11 sites)"
-    country: DE
-    technology: battery_storage
-    coordinates: [51.165, 10.451]  # centroid Allemagne — sites individuels non publiés
-    capacity_mwp: 789.0
-    commissioning_year: 2028
-    operator: "Kyon Energy (TotalEnergies)"
-    allianz_stake_pct: 50.0
-    acquisition_year: 2026
-    press_release_url: "https://www.allianzcapitalpartners.com/en/media/news/20260303-allianzgi-partners-with-totalenergies"
-    notes: "AllianzGI (Allianz European Infrastructure Fund II) acquiert 50% de 11 projets BESS auprès de TotalEnergies ; 789 MW / 1628 MWh ; 500M€. Tous opérationnels d'ici 2028. Coords = centroid DE (lat/lon des sites non encore publics)."
-    has_pvgis_estimate: false
-    has_reported_production: false
-
-# === COMPTEUR TRANSPARENCE (à afficher sur le globe) ===
-# Phase 1 close : 23 parcs cartographiés (10 initiaux + 13 enrichis 2010-2026).
-# Capacités gross (full park, pas pondérées par stake ACP).
+# === MÉTADONNÉES PORTEFEUILLE ===
 metadata:
-  total_parks_mapped: 23
-  total_parks_claimed_by_acp: 150  # corporate communication
-  capacity_total_mw: 6372  # somme des capacities mappées (gross park MW)
-  countries_covered: ["PT", "ES", "IT", "DE", "PL", "FR", "GB", "US", "SE", "FI", "NL", "IE"]
-  source_disclaimer: "Périmètre publiquement identifiable depuis press releases ACP / Allianz / opérateurs partenaires. Le reste du portefeuille (~120+ parcs) est détenu indirectement via fonds infra (Macquarie Infrastructure, Brookfield Infrastructure, etc.) sans nom public des assets sous-jacents."
-  phase1_completed_on: "2026-04-28"
+  total_parks_mapped: 11
+  total_parks_claimed_by_acp: 150  # corporate communication (incluant participations indirectes via fonds infra tiers)
+  capacity_total_mw: 1003.9  # somme des capacités gross park solaire uniquement
+  countries_covered: ["IT", "PT", "FR", "US", "ES", "IE"]
+  source_disclaimer: "V1 solaire PV uniquement, equity direct ACP / AllianzGI. Sources : ACP press archive, opérateurs partenaires, trade press (PV-Tech, Renewables Now), confirmé par recherche deep Gemini 2026-04-30. Hors périmètre : éolien, BESS, transmission, fonds infra tiers, proxy PPA / revenue swap."
+  phase1_completed_on: "2026-04-30"
