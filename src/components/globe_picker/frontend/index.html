@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #050810;
+    overflow: hidden;
+    font-family: -apple-system, "Inter", system-ui, sans-serif;
+  }
+  #globeViz { width: 100%; height: 100%; cursor: grab; }
+  #globeViz:active { cursor: grabbing; }
+  .label-card {
+    background: rgba(13, 19, 32, 0.95);
+    backdrop-filter: blur(8px);
+    color: #f1f5f9;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(125, 211, 252, 0.4);
+    font-size: 12px;
+    letter-spacing: 0.005em;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .label-card .lbl-name { font-weight: 600; color: #f1f5f9; margin-bottom: 3px; }
+  .label-card .lbl-meta { color: #94a3b8; font-size: 11px; letter-spacing: 0.01em; }
+  .label-card .lbl-hint {
+    color: #7dd3fc;
+    font-size: 10px;
+    margin-top: 4px;
+    font-family: "JetBrains Mono", monospace;
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+<div id="globeViz"></div>
+
+<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+<script src="https://unpkg.com/globe.gl@2.27.4/dist/globe.gl.min.js"></script>
+
+<script>
+  // ----- Streamlit component protocol (raw postMessage) -----------------
+  const RETURN_VALUE_MSG = "streamlit:setComponentValue";
+  const READY_MSG = "streamlit:componentReady";
+  const HEIGHT_MSG = "streamlit:setFrameHeight";
+
+  function sendToStreamlit(type, extra) {
+    const message = Object.assign({ isStreamlitMessage: true, type }, extra || {});
+    window.parent.postMessage(message, "*");
+  }
+
+  function setReady() {
+    sendToStreamlit(READY_MSG, { apiVersion: 1 });
+  }
+
+  function setHeight(h) {
+    sendToStreamlit(HEIGHT_MSG, { height: h });
+  }
+
+  function setValue(v) {
+    sendToStreamlit(RETURN_VALUE_MSG, { value: v, dataType: "json" });
+  }
+
+  // ----- Globe instance --------------------------------------------------
+  let globe = null;
+  let lastParksJson = null;
+
+  function buildGlobe(parks, height) {
+    const elem = document.getElementById("globeViz");
+    globe = Globe()(elem)
+      .globeImageUrl("https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg")
+      .bumpImageUrl("https://unpkg.com/three-globe/example/img/earth-topology.png")
+      .backgroundImageUrl("https://unpkg.com/three-globe/example/img/night-sky.png")
+      .atmosphereColor("#7dd3fc")
+      .atmosphereAltitude(0.20)
+      .pointsData(parks)
+      .pointLat("lat")
+      .pointLng("lng")
+      .pointColor(() => "#7dd3fc")
+      .pointAltitude(0.014)
+      .pointRadius(0.45)
+      .pointResolution(20)
+      .pointLabel(d => `
+        <div class="label-card">
+          <div class="lbl-name">${d.name}</div>
+          <div class="lbl-meta">${d.country} · ${d.cap.toFixed(1)} MWp</div>
+          <div class="lbl-hint">▸ click to inspect</div>
+        </div>
+      `)
+      .ringsData(parks)
+      .ringLat("lat")
+      .ringLng("lng")
+      .ringColor(() => "rgba(125, 211, 252, 0.55)")
+      .ringMaxRadius(2.0)
+      .ringPropagationSpeed(0.7)
+      .ringRepeatPeriod(2200)
+      .ringAltitude(0.003)
+      .onPointClick(point => {
+        if (point && point.id) {
+          // Stop auto-rotate when user clicks
+          globe.controls().autoRotate = false;
+          // Smooth zoom + tilt to the selected park
+          globe.pointOfView({ lat: point.lat, lng: point.lng, altitude: 1.6 }, 1200);
+          // Send park_id back to Streamlit
+          setValue(point.id);
+        }
+      });
+
+    // Initial framing — Europe-centric
+    globe.pointOfView({ lat: 38, lng: 4, altitude: 2.4 }, 0);
+
+    globe.controls().autoRotate = true;
+    globe.controls().autoRotateSpeed = 0.35;
+    globe.controls().enableZoom = true;
+    globe.controls().minDistance = 200;
+    globe.controls().maxDistance = 800;
+
+    // Resize handling
+    function fit() {
+      globe.width(elem.clientWidth);
+      globe.height(elem.clientHeight);
+    }
+    fit();
+    window.addEventListener("resize", fit);
+  }
+
+  function onRender(args) {
+    const parks = args.parks || [];
+    const height = args.height || 620;
+
+    const parksJson = JSON.stringify(parks);
+    if (!globe) {
+      buildGlobe(parks, height);
+    } else if (parksJson !== lastParksJson) {
+      // Update points if parks list changed
+      globe.pointsData(parks).ringsData(parks);
+    }
+    lastParksJson = parksJson;
+
+    setHeight(height);
+  }
+
+  // ----- Event loop ------------------------------------------------------
+  window.addEventListener("message", (event) => {
+    if (!event.data || !event.data.type) return;
+    if (event.data.type === "streamlit:render") {
+      onRender(event.data.args || {});
+    }
+  });
+
+  setReady();
+  setHeight(620);
+</script>
+</body>
+</html>

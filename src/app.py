@@ -1,9 +1,8 @@
 """Allianz Renewables Atlas — single-page entry point.
 
-Vraie photo Earth depuis l'espace (globe.gl + NASA Blue Marble) en iframe,
-sélection par dropdown, panel avec vue satellite Esri zoom et analyse PVGIS.
-
-Style : sober, sans emoji, design analyste private equity.
+Globe Earth from space (globe.gl + NASA Blue Marble) avec click natif
+sur les markers via custom Streamlit component → panel détail direct.
+Vue satellite Esri + PVGIS year-2023 actual hourly data.
 """
 
 from __future__ import annotations
@@ -23,8 +22,9 @@ import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
+from src.components.globe_picker import globe_picker
 from src.lib.parks_loader import load_parks_index
-from src.lib.pvgis_fetch import fetch_pvgis_hourly
+from src.lib.pvgis_fetch import DEFAULT_REPRESENTATIVE_YEAR, fetch_pvgis_hourly
 from src.lib.reported_production import load_reported_production
 from src.lib.solar_metrics import (
     capacity_factor_annual,
@@ -50,8 +50,6 @@ CSS_PATH = Path(__file__).resolve().parent / "assets" / "style.css"
 if CSS_PATH.exists():
     st.markdown(f"<style>{CSS_PATH.read_text()}</style>", unsafe_allow_html=True)
 
-PORTFOLIO_SWEEP_PATH = _ROOT / "data" / "portfolio_sweep.json"
-
 SEVERITY_LABELS = {
     "green": "ALIGNED",
     "yellow": "MONITOR",
@@ -60,10 +58,11 @@ SEVERITY_LABELS = {
 }
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+DATA_YEAR = DEFAULT_REPRESENTATIVE_YEAR  # 2023, dernière année complète SARAH-3
 
 
 # ---------------------------------------------------------------------------
-# Data loaders
+# Data loaders (cached)
 # ---------------------------------------------------------------------------
 
 
@@ -100,118 +99,11 @@ def _fetch_hourly_cached(park_id: str, lat: float, lon: float, peakpower_mw: flo
 
 
 # ---------------------------------------------------------------------------
-# Globe.gl HTML — real NASA Blue Marble texture, atmospheric glow, auto-rotate
+# Satellite view HTML — Leaflet + Esri World Imagery
 # ---------------------------------------------------------------------------
 
 
-def _build_globe_html(parks: pd.DataFrame, height: int = 600) -> str:
-    """Renvoie le HTML autonome du globe Three.js avec textures NASA."""
-    points = [
-        {
-            "name": row["name"],
-            "country": row["country"],
-            "cap": float(row["capacity_mwp"]),
-            "lat": float(row["lat"]),
-            "lng": float(row["lon"]),
-        }
-        for _, row in parks.iterrows()
-    ]
-    points_json = json.dumps(points)
-    return f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>
-  html, body {{ margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }}
-  #globeViz {{ width: 100%; height: 100%; cursor: grab; }}
-  #globeViz:active {{ cursor: grabbing; }}
-  .label-card {{
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(8px);
-    color: #f1f5f9;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid rgba(125, 211, 252, 0.4);
-    font-family: -apple-system, "Inter", system-ui, sans-serif;
-    font-size: 12px;
-    letter-spacing: 0.01em;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    pointer-events: none;
-    white-space: nowrap;
-  }}
-  .label-card .lbl-name {{ font-weight: 600; color: #f1f5f9; margin-bottom: 2px; }}
-  .label-card .lbl-meta {{ color: #94a3b8; font-size: 11px; }}
-</style>
-</head>
-<body>
-<div id="globeViz"></div>
-<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
-<script src="https://unpkg.com/globe.gl@2.27.4/dist/globe.gl.min.js"></script>
-<script>
-  const POINTS = {points_json};
-  const elem = document.getElementById('globeViz');
-
-  const globe = Globe()
-    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
-    .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
-    .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
-    .atmosphereColor('#fbbf24')                // single accent — warm amber, solar resonance
-    .atmosphereAltitude(0.20)
-    .pointsData(POINTS)
-    .pointLat('lat')
-    .pointLng('lng')
-    .pointColor(() => '#fbbf24')
-    .pointAltitude(0.014)
-    .pointRadius(0.38)
-    .pointLabel(d => `
-      <div class="label-card">
-        <div class="lbl-name">${{d.name}}</div>
-        <div class="lbl-meta">${{d.country}} · ${{d.cap.toFixed(1)}} MWp</div>
-      </div>
-    `)
-    .pointsMerge(true)
-    .ringsData(POINTS)
-    .ringLat('lat')
-    .ringLng('lng')
-    .ringColor(() => 'rgba(251, 191, 36, 0.55)')
-    .ringMaxRadius(2.0)
-    .ringPropagationSpeed(0.7)
-    .ringRepeatPeriod(2200)
-    .ringAltitude(0.003);
-
-  globe(elem);
-
-  // Initial framing — Europe-centric
-  globe.pointOfView({{ lat: 38, lng: 4, altitude: 2.4 }}, 0);
-
-  // Smooth auto-rotation
-  globe.controls().autoRotate = true;
-  globe.controls().autoRotateSpeed = 0.35;
-  globe.controls().enableZoom = true;
-  globe.controls().minDistance = 200;
-  globe.controls().maxDistance = 800;
-
-  // Resize handling
-  function fit() {{
-    globe.width(elem.clientWidth);
-    globe.height(elem.clientHeight);
-  }}
-  fit();
-  window.addEventListener('resize', fit);
-</script>
-</body>
-</html>
-"""
-
-
-# ---------------------------------------------------------------------------
-# Satellite view HTML — Leaflet + Esri World Imagery (free, no auth)
-# ---------------------------------------------------------------------------
-
-
-def _build_satellite_html(lat: float, lon: float, label: str, height: int = 280) -> str:
-    """Vue satellite zoomée sur la zone du parc, via Esri World Imagery (gratuit)."""
+def _build_satellite_html(lat: float, lon: float, label: str) -> str:
     label_safe = label.replace("'", "&#39;").replace('"', "&quot;")
     return f"""
 <!DOCTYPE html>
@@ -227,7 +119,7 @@ def _build_satellite_html(lat: float, lon: float, label: str, height: int = 280)
     background: rgba(5, 8, 16, 0.85) !important;
     color: #94a3b8 !important;
   }}
-  .leaflet-control-attribution a {{ color: #fbbf24 !important; }}
+  .leaflet-control-attribution a {{ color: #7dd3fc !important; }}
   .leaflet-control-zoom a {{
     background: rgba(13, 19, 32, 0.92) !important;
     color: #cbd5e1 !important;
@@ -236,7 +128,7 @@ def _build_satellite_html(lat: float, lon: float, label: str, height: int = 280)
   }}
   .leaflet-control-zoom a:hover {{
     background: rgba(13, 19, 32, 1) !important;
-    color: #fbbf24 !important;
+    color: #7dd3fc !important;
   }}
 </style>
 </head>
@@ -252,20 +144,13 @@ def _build_satellite_html(lat: float, lon: float, label: str, height: int = 280)
     {{ maxZoom: 18, attribution: 'Esri, Maxar, Earthstar Geographics' }}
   ).addTo(map);
 
-  // Outer ring + inner dot — accent amber
   L.circleMarker([{lat}, {lon}], {{
-    radius: 14,
-    color: '#fbbf24',
-    weight: 2,
-    fillColor: '#fbbf24',
-    fillOpacity: 0.12,
+    radius: 14, color: '#7dd3fc', weight: 2,
+    fillColor: '#7dd3fc', fillOpacity: 0.12,
   }}).addTo(map).bindPopup('{label_safe}');
   L.circleMarker([{lat}, {lon}], {{
-    radius: 5,
-    color: '#fbbf24',
-    weight: 2,
-    fillColor: '#fbbf24',
-    fillOpacity: 0.95,
+    radius: 5, color: '#7dd3fc', weight: 2,
+    fillColor: '#7dd3fc', fillOpacity: 0.95,
   }}).addTo(map);
 </script>
 </body>
@@ -304,48 +189,37 @@ c2.metric("Installed capacity", f"{parks_df['capacity_mwp'].sum():,.0f} MWp")
 c3.metric("Countries", f"{parks_df['country'].nunique()}")
 c4.metric("With production delta", f"{len(reported_map)} of {len(parks_df)}")
 
-st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Globe — globe.gl iframe with NASA Blue Marble texture
+# Globe — custom component with click events
 # ---------------------------------------------------------------------------
 
-components.html(_build_globe_html(parks_df), height=600, scrolling=False)
+globe_parks = [
+    {
+        "id": row["id"],
+        "name": row["name"],
+        "country": row["country"],
+        "cap": float(row["capacity_mwp"]),
+        "lat": float(row["lat"]),
+        "lng": float(row["lon"]),
+    }
+    for _, row in parks_df.iterrows()
+]
 
-# ---------------------------------------------------------------------------
-# Park selector
-# ---------------------------------------------------------------------------
+clicked_park_id = globe_picker(parks=globe_parks, height=620, key="atlas-globe")
 
-park_options = ["— select a park —"] + parks_df["name"].tolist()
+# Persist selection across reruns
+if clicked_park_id:
+    st.session_state["selected_park_id"] = clicked_park_id
+
 selected_park_id = st.session_state.get("selected_park_id")
-default_idx = 0
-if selected_park_id:
-    matching = parks_df[parks_df["id"] == selected_park_id]
-    if not matching.empty:
-        default_idx = park_options.index(matching.iloc[0]["name"])
-
-selected_name = st.selectbox(
-    "Park",
-    options=park_options,
-    index=default_idx,
-    label_visibility="collapsed",
-)
-
-if selected_name != "— select a park —":
-    matching = parks_df[parks_df["name"] == selected_name]
-    if not matching.empty:
-        st.session_state["selected_park_id"] = matching.iloc[0]["id"]
-        selected_park_id = matching.iloc[0]["id"]
-else:
-    selected_park_id = None
-    if "selected_park_id" in st.session_state:
-        del st.session_state["selected_park_id"]
 
 if not selected_park_id:
     st.markdown(
         """
         <div class="empty-hint">
-          <span class="empty-prompt">▸</span> Select a park from the dropdown to open
+          <span class="empty-prompt">▸</span> Click a marker on the globe to open
           satellite imagery and PVGIS analysis.
         </div>
         """,
@@ -353,7 +227,11 @@ if not selected_park_id:
     )
     st.stop()
 
-selected_row = parks_df[parks_df["id"] == selected_park_id].iloc[0]
+selected_row = parks_df[parks_df["id"] == selected_park_id]
+if selected_row.empty:
+    st.session_state.pop("selected_park_id", None)
+    st.rerun()
+selected_row = selected_row.iloc[0]
 
 # ---------------------------------------------------------------------------
 # Park header
@@ -391,7 +269,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# Satellite view (top of the panel — wow effect)
+# Satellite view
 # ---------------------------------------------------------------------------
 
 components.html(
@@ -430,7 +308,7 @@ annual_mwh = annual_kwh / 1000.0
 cf_annual = capacity_factor_annual(
     hourly_data["hourly_production_kwh"], peakpower_mw=selected_row["capacity_mwp"]
 )
-monthly = monthly_aggregates(hourly_data["hourly_production_kwh"])
+monthly = monthly_aggregates(hourly_data["hourly_production_kwh"], year=DATA_YEAR)
 
 reported = reported_map.get(selected_park_id)
 delta_pct = None
@@ -455,12 +333,12 @@ m1, m2, m3, m4 = st.columns(4)
 m1.metric(
     "Today's typical output",
     f"{today_est['production_kwh'] / 1000:,.1f} MWh",
-    help=f"Climatological estimate for {today_est['date']}, based on TMY 2019.",
+    help=f"Climatological estimate for the calendar day {today_est['date'][5:]}, derived from PVGIS year {DATA_YEAR}.",
 )
 m2.metric(
-    "Annual estimate",
+    f"Annual output ({DATA_YEAR})",
     f"{annual_mwh:,.0f} MWh",
-    help="PVGIS annual production with 14% system losses.",
+    help=f"PVGIS year-{DATA_YEAR} actual hourly data, 14% system losses.",
 )
 m3.metric(
     "Capacity factor",
@@ -479,7 +357,7 @@ if reported:
 else:
     m4.metric("Delta vs reported", "—", help="No public production figure available for this park.")
 
-# Source caption — explicit traceability for the reported figure
+# Source caption
 if reported:
     src_url = reported.get("source_url", "")
     src_year = reported.get("year", "—")
@@ -509,52 +387,38 @@ else:
 st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Single chart — monthly seasonality
+# Daily output chart — single fluid line, dated year DATA_YEAR
 # ---------------------------------------------------------------------------
 
-monthly_mwh = [m["production_mwh"] for m in monthly]
 daily_kwh = hourly_to_daily(hourly_data["hourly_production_kwh"])
 daily_mwh = [v / 1000.0 for v in daily_kwh]
-day_dates = pd.date_range("2019-01-01", periods=365, freq="D")
+day_dates = pd.date_range(f"{DATA_YEAR}-01-01", periods=365, freq="D")
 
-# ----- Daily seasonality chart (smooth, fluid, premium) -------------
+# Light 7-day smoothing for a clean curve (replaces the dual-line previous version)
+import numpy as np
+arr = np.asarray(daily_mwh)
+window = 5
+smooth = np.convolve(arr, np.ones(window) / window, mode="same")
+
 fig_daily = go.Figure()
 fig_daily.add_trace(
     go.Scatter(
         x=day_dates,
-        y=daily_mwh,
+        y=smooth,
         mode="lines",
-        line=dict(color="#fbbf24", width=1.4, shape="spline", smoothing=0.6),
+        line=dict(color="#7dd3fc", width=2.2, shape="spline", smoothing=0.5),
         fill="tozeroy",
-        fillcolor="rgba(251, 191, 36, 0.10)",
-        hovertemplate="%{x|%d %b} · %{y:,.1f} MWh<extra></extra>",
+        fillcolor="rgba(125, 211, 252, 0.10)",
+        hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
         name="Daily output",
-    )
-)
-
-# 7-day rolling mean — slightly emphasized
-import numpy as np
-arr = np.asarray(daily_mwh)
-window = 7
-rolling = np.convolve(arr, np.ones(window) / window, mode="same")
-fig_daily.add_trace(
-    go.Scatter(
-        x=day_dates,
-        y=rolling,
-        mode="lines",
-        line=dict(color="rgba(251, 191, 36, 0.9)", width=2.4, shape="spline", smoothing=0.4),
-        hoverinfo="skip",
-        name="7-day rolling mean",
     )
 )
 
 fig_daily.update_layout(
     title=dict(
-        text="Daily output across the climatic year",
+        text=f"Daily output · year {DATA_YEAR}",
         font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
-        x=0.0,
-        xanchor="left",
-        pad=dict(b=8),
+        x=0.0, xanchor="left", pad=dict(b=8),
     ),
     height=240,
     margin=dict(l=0, r=0, t=44, b=10),
@@ -563,8 +427,8 @@ fig_daily.update_layout(
     xaxis=dict(
         showgrid=False,
         tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
-        tickformat="%b",
-        dtick="M1",
+        tickformat="%b %Y",
+        dtick="M2",
     ),
     yaxis=dict(
         gridcolor="rgba(148, 163, 184, 0.06)",
@@ -575,24 +439,28 @@ fig_daily.update_layout(
     showlegend=False,
     hoverlabel=dict(
         bgcolor="rgba(13, 19, 32, 0.95)",
-        bordercolor="rgba(251, 191, 36, 0.4)",
+        bordercolor="rgba(125, 211, 252, 0.4)",
         font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
     ),
 )
 
 st.plotly_chart(fig_daily, width="stretch", config={"displayModeBar": False})
 
-# ----- Monthly bar chart (kept as macro view) ------------------------
+# ---------------------------------------------------------------------------
+# Monthly bar chart
+# ---------------------------------------------------------------------------
+
 st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
+monthly_mwh = [m["production_mwh"] for m in monthly]
 fig_monthly = go.Figure()
 fig_monthly.add_trace(
     go.Bar(
         x=MONTH_NAMES,
         y=monthly_mwh,
         marker=dict(
-            color="rgba(251, 191, 36, 0.78)",
-            line=dict(color="rgba(251, 191, 36, 0.95)", width=0.8),
+            color="rgba(125, 211, 252, 0.78)",
+            line=dict(color="rgba(125, 211, 252, 0.95)", width=0.8),
         ),
         hovertemplate="%{x} · %{y:,.0f} MWh<extra></extra>",
         name="Estimated",
@@ -614,11 +482,9 @@ if reported:
 
 fig_monthly.update_layout(
     title=dict(
-        text="Monthly production estimate (MWh)",
+        text=f"Monthly production · year {DATA_YEAR}",
         font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
-        x=0.0,
-        xanchor="left",
-        pad=dict(b=8),
+        x=0.0, xanchor="left", pad=dict(b=8),
     ),
     height=260,
     margin=dict(l=0, r=0, t=44, b=0),
@@ -636,7 +502,7 @@ fig_monthly.update_layout(
     showlegend=False,
     hoverlabel=dict(
         bgcolor="rgba(13, 19, 32, 0.95)",
-        bordercolor="rgba(251, 191, 36, 0.4)",
+        bordercolor="rgba(125, 211, 252, 0.4)",
         font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
     ),
 )
@@ -644,28 +510,36 @@ fig_monthly.update_layout(
 st.plotly_chart(fig_monthly, width="stretch", config={"displayModeBar": False})
 
 # ---------------------------------------------------------------------------
+# Reset button
+# ---------------------------------------------------------------------------
+
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+if st.button("← Back to globe", type="secondary"):
+    st.session_state.pop("selected_park_id", None)
+    st.rerun()
+
+# ---------------------------------------------------------------------------
 # About this data
 # ---------------------------------------------------------------------------
 
 with st.expander("About the methodology", expanded=False):
     st.markdown(
-        """
+        f"""
 **Source.** PVGIS v5.2 (Joint Research Centre, European Commission) —
 the reference tool for European solar production estimates. Free, no API key.
 <https://re.jrc.ec.europa.eu/pvg_tools/en/>
 
-**TMY (Typical Meteorological Year).** PVGIS reports what a panel produces in
-an *average* climatic year, computed from 16 years of satellite radiation data
-(2005-2020 for Europe-Africa). It does **not** report what the park produced
-this specific year.
+**Year used.** {DATA_YEAR} actual hourly data from the PVGIS SARAH-3 satellite
+radiation database (latest full year published). PVGIS reconstructs hour-by-hour
+solar production based on Meteosat satellite imagery + a panel model.
 
 **Default assumptions.** System losses 14% (inverter, cabling, soiling
 baseline). Mounting fixed, azimuth 0° south, tilt = lat. crystSi modules.
 
 **Reading the delta.** A delta of -8% does **not** mean the park
-underperforms. It can reflect: a sub-average climatic year, real losses
-above 14%, marketing rounding in the press release, or a more optimal
-real geometry than our defaults.
+underperforms. It can reflect: actual losses above 14%, marketing rounding
+in the press release, geometry differences vs our defaults, or panel
+degradation since commissioning.
 
 **Severity thresholds.** Green: |Δ| < 5% (aligned). Yellow: 5-10% (within
 model uncertainty). Red: ≥ 10% (significant gap, investigate).
@@ -674,7 +548,7 @@ model uncertainty). Red: ≥ 10% (significant gap, investigate).
 
 **Data sourcing.** Park list curated from Allianz Capital Partners press
 archive, operator partner publications, and trade press, cross-checked via
-deep research run on 2026-04-30. Satellite imagery: Esri World Imagery
-(Maxar, Earthstar Geographics).
+Global Energy Monitor (GEM Wiki) for exact GPS coordinates. Satellite imagery:
+Esri World Imagery (Maxar, Earthstar Geographics).
 """
     )

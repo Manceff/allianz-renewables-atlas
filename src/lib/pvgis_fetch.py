@@ -19,7 +19,7 @@ PVGIS_SERIESCALC_URL = "https://re.jrc.ec.europa.eu/api/v5_2/seriescalc"
 DEFAULT_LOSS_PCT = 14.0  # pertes système standard PVGIS (câblage + onduleur + souillure)
 DEFAULT_PVTECH = "crystSi"
 DEFAULT_TIMEOUT_SEC = 30
-DEFAULT_REPRESENTATIVE_YEAR = 2019  # année climatiquement neutre dans la fenêtre SARAH
+DEFAULT_REPRESENTATIVE_YEAR = 2023  # dernière année complète dans SARAH-3 (publié 2025)
 
 
 class PvgisFetchError(RuntimeError):

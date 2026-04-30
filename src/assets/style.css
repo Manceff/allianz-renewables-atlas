@@ -17,10 +17,11 @@
   --text-secondary: #94a3b8;
   --text-muted:     #64748b;
   --text-faint:     #475569;
-  --accent:         #fbbf24;        /* warm amber — solar resonance, single accent */
-  --accent-soft:    rgba(251, 191, 36, 0.14);
+  --accent:         #7dd3fc;        /* sky cyan — blends with Earth atmosphere glow */
+  --accent-bright:  #38bdf8;
+  --accent-soft:    rgba(125, 211, 252, 0.14);
   --severity-green: #34d399;
-  --severity-amber: #fbbf24;
+  --severity-amber: #7dd3fc;
   --severity-red:   #fb7185;
   --shadow-tinted:  0 4px 24px rgba(5, 8, 16, 0.4), 0 1px 3px rgba(5, 8, 16, 0.6);
   --radius-sm: 6px;
@@ -214,7 +215,7 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
   text-decoration: none;
   font-size: 0.85rem;
   font-weight: 500;
-  border-bottom: 1px dotted rgba(251, 191, 36, 0.4);
+  border-bottom: 1px dotted rgba(125, 211, 252, 0.4);
   transition: border-bottom-color 180ms ease-out, color 180ms ease-out;
   white-space: nowrap;
 }
@@ -255,7 +256,7 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
 .source-caption a {
   color: var(--accent);
   text-decoration: none;
-  border-bottom: 1px dotted rgba(251, 191, 36, 0.35);
+  border-bottom: 1px dotted rgba(125, 211, 252, 0.35);
   transition: border-bottom-color 180ms ease-out;
 }
 
