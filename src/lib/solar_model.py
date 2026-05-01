@@ -242,6 +242,89 @@ def _fetch_archive_with_components(
     }
 
 
+def estimate_instant_output_mw(
+    lat: float,
+    lon: float,
+    capacity_mwp: float,
+    ghi_w_m2: float,
+    dni_w_m2: float,
+    dhi_w_m2: float,
+    temp_c: float,
+    wind_ms: float,
+    time_iso: str,
+    tilt: float | None = None,
+    azimuth: float = 180.0,
+    loss_pct: float = DEFAULT_LOSS_PCT,
+    dc_ac_ratio: float = DEFAULT_DC_AC_RATIO,
+) -> float:
+    """Estimate the current AC output (MW) using the SAME pvlib pipeline as the full-year model.
+
+    Coherent with compute_hourly_production : POA transposition, Sandia cell temp,
+    PVWatts DC + inverter clipping, system losses. Inputs are a single weather snapshot.
+
+    Args :
+        lat, lon : park coords
+        capacity_mwp : peak DC capacity in MWp
+        ghi_w_m2 : Global Horizontal Irradiance (W/m²)
+        dni_w_m2 : Direct Normal Irradiance (W/m²)
+        dhi_w_m2 : Diffuse Horizontal Irradiance (W/m²)
+        temp_c : air temperature (°C)
+        wind_ms : wind speed at 10 m (m/s)
+        time_iso : ISO 8601 timestamp string of the snapshot
+
+    Returns :
+        AC power in MW. Always >= 0.
+    """
+    if capacity_mwp <= 0 or ghi_w_m2 <= 0:
+        return 0.0
+
+    if tilt is None:
+        tilt = round(abs(lat) * 0.76, 1)
+
+    # Single-instant pandas-friendly index
+    times = pd.to_datetime([time_iso], utc=True)
+    ghi_s = pd.Series([ghi_w_m2], index=times)
+    dni_s = pd.Series([dni_w_m2], index=times)
+    dhi_s = pd.Series([dhi_w_m2], index=times)
+    temp_s = pd.Series([temp_c], index=times)
+    wind_s = pd.Series([wind_ms], index=times)
+
+    solpos = pvlib.solarposition.get_solarposition(times, lat, lon)
+    dni_extra = pvlib.irradiance.get_extra_radiation(times)
+
+    poa = pvlib.irradiance.get_total_irradiance(
+        surface_tilt=tilt,
+        surface_azimuth=azimuth,
+        solar_zenith=solpos["apparent_zenith"],
+        solar_azimuth=solpos["azimuth"],
+        dni=dni_s, ghi=ghi_s, dhi=dhi_s,
+        dni_extra=dni_extra,
+        model="haydavies",
+    )
+    poa_global = poa["poa_global"].fillna(0).clip(lower=0)
+
+    temp_params = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][DEFAULT_TEMP_MODEL]
+    cell_temp = pvlib.temperature.sapm_cell(
+        poa_global=poa_global, temp_air=temp_s, wind_speed=wind_s,
+        a=temp_params["a"], b=temp_params["b"], deltaT=temp_params["deltaT"],
+    )
+
+    capacity_kwp = capacity_mwp * 1000.0
+    dc_kw = pvlib.pvsystem.pvwatts_dc(
+        effective_irradiance=poa_global, temp_cell=cell_temp,
+        pdc0=capacity_kwp, gamma_pdc=-0.004,
+    )
+    ac_capacity_kw = capacity_kwp / dc_ac_ratio
+    ac_kw = pvlib.inverter.pvwatts(
+        pdc=dc_kw, pdc0=ac_capacity_kw * dc_ac_ratio,
+        eta_inv_nom=0.96, eta_inv_ref=0.9637,
+    )
+    ac_kw = ac_kw.fillna(0).clip(lower=0, upper=ac_capacity_kw)
+    ac_after_losses_kw = ac_kw * (1.0 - loss_pct / 100.0)
+
+    return float(ac_after_losses_kw.iloc[0]) / 1000.0  # kW → MW
+
+
 def compute_period_production(
     lat: float,
     lon: float,

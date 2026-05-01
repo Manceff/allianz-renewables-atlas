@@ -36,10 +36,10 @@ from src.lib.electricity_prices import (
     get_zone,
     interpret_spot_price,
 )
-from src.lib.live_weather import estimate_current_output_mw, fetch_current_weather
+from src.lib.live_weather import fetch_current_weather
 from src.lib.parks_loader import load_parks_index
 from src.lib.reported_production import load_reported_production
-from src.lib.solar_model import compute_hourly_production
+from src.lib.solar_model import compute_hourly_production, estimate_instant_output_mw
 from src.lib.solar_metrics import (
     capacity_factor_annual,
     estimate_for_date,
@@ -406,10 +406,16 @@ if live_weather:
         help=f"Sampled at the park coordinates · {live_weather['time_iso']}",
     )
 
-    estimated_mw = estimate_current_output_mw(
+    estimated_mw = estimate_instant_output_mw(
+        lat=float(selected_row["lat"]),
+        lon=float(selected_row["lon"]),
         capacity_mwp=float(selected_row["capacity_mwp"]),
         ghi_w_m2=live_weather["ghi_w_m2"],
+        dni_w_m2=live_weather.get("dni_w_m2", 0.0),
+        dhi_w_m2=live_weather.get("diffuse_w_m2", 0.0),
         temp_c=live_weather["temp_c"],
+        wind_ms=live_weather.get("wind_ms", 1.0),
+        time_iso=live_weather.get("time_iso") or "",
     )
     cf_now = (estimated_mw / float(selected_row["capacity_mwp"]) * 100.0) if selected_row["capacity_mwp"] else 0.0
 

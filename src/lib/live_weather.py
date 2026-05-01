@@ -25,6 +25,9 @@ def fetch_current_weather(lat: float, lon: float) -> dict[str, Any] | None:
         temp_c : air temperature at 2 m (°C)
         cloud_cover_pct : cloud cover (%)
         wind_ms : wind speed at 10 m (m/s)
+        direct_w_m2 : direct on horizontal (W/m²)
+        diffuse_w_m2 : diffuse horizontal (W/m²)
+        dni_w_m2 : direct normal irradiance (W/m²)
         time_iso : timestamp of the measurement (ISO 8601)
     """
     params = {
@@ -32,7 +35,8 @@ def fetch_current_weather(lat: float, lon: float) -> dict[str, Any] | None:
         "longitude": lon,
         "current": (
             "shortwave_radiation,temperature_2m,cloud_cover,"
-            "wind_speed_10m,direct_radiation,diffuse_radiation"
+            "wind_speed_10m,direct_radiation,diffuse_radiation,"
+            "direct_normal_irradiance"
         ),
         "timezone": "auto",
     }
@@ -55,6 +59,7 @@ def fetch_current_weather(lat: float, lon: float) -> dict[str, Any] | None:
         "wind_ms": float(current.get("wind_speed_10m") or 0.0),
         "direct_w_m2": float(current.get("direct_radiation") or 0.0),
         "diffuse_w_m2": float(current.get("diffuse_radiation") or 0.0),
+        "dni_w_m2": float(current.get("direct_normal_irradiance") or 0.0),
         "time_iso": str(current.get("time") or ""),
     }
 
