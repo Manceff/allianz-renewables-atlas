@@ -51,6 +51,84 @@ def get_zone(country: str, park_id: str | None = None) -> str | None:
     return COUNTRY_TO_ZONE.get(country)
 
 
+ITALIAN_ZONES = {"IT-North", "IT-Centre-North", "IT-Centre-South", "IT-South", "IT-Sicily", "IT-Sardinia", "IT-Calabria"}
+
+
+def interpret_spot_price(price_eur_mwh: float | None, zone: str) -> dict:
+    """Return a human label + context for a spot price.
+
+    Returns dict with :
+        label : short tag ("floor", "negative", "low", "normal", "elevated", "high")
+        warn : True if the value warrants a contextual disclaimer
+        explain : 1-line explanation
+    """
+    if price_eur_mwh is None:
+        return {"label": "—", "warn": False, "explain": "no data"}
+
+    if price_eur_mwh < -1.0:
+        return {
+            "label": "negative",
+            "warn": True,
+            "explain": (
+                "Solar cannibalisation peak. The market is paying consumers "
+                "to take electricity because solar/wind production exceeds demand."
+            ),
+        }
+    if price_eur_mwh <= 0.5 and zone in ITALIAN_ZONES:
+        return {
+            "label": "italian floor",
+            "warn": True,
+            "explain": (
+                "Italian day-ahead has a regulatory floor at 0 €/MWh — "
+                "the market cannot price negatively. This signals supply ≥ demand."
+            ),
+        }
+    if price_eur_mwh <= 0.5:
+        return {
+            "label": "near zero",
+            "warn": True,
+            "explain": "Supply matches demand. Solar likely saturating the grid this hour.",
+        }
+    if price_eur_mwh < 20:
+        return {"label": "very low", "warn": False, "explain": "Below typical baseload cost."}
+    if price_eur_mwh < 50:
+        return {"label": "low", "warn": False, "explain": "Below 2023-2025 average."}
+    if price_eur_mwh < 100:
+        return {"label": "normal", "warn": False, "explain": "Within typical daytime range."}
+    if price_eur_mwh < 200:
+        return {"label": "elevated", "warn": False, "explain": "Above typical — peak demand or supply tight."}
+    return {"label": "high", "warn": False, "explain": "Significantly above normal."}
+
+
+def fetch_today_curve(zone: str) -> dict | None:
+    """Fetch today's hourly day-ahead curve for visualisation. Not cached.
+
+    Returns dict with :
+        timestamps : list of unix seconds
+        prices : list of floats (€/MWh)
+    """
+    import datetime as _dt
+    today = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
+    try:
+        resp = requests.get(
+            API_URL,
+            params={"bzn": zone, "start": today, "end": today},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        payload = resp.json()
+    except (requests.RequestException, ValueError):
+        return None
+
+    prices = payload.get("price")
+    timestamps = payload.get("unix_seconds")
+    if not prices or not timestamps:
+        return None
+
+    return {"timestamps": timestamps, "prices": prices}
+
+
 def fetch_current_spot_price(zone: str) -> dict | None:
     """Return the current-hour day-ahead spot price for a zone.
 

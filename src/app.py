@@ -29,7 +29,9 @@ from src.lib.electricity_prices import (
     compute_revenue_metrics,
     fetch_current_spot_price,
     fetch_hourly_prices,
+    fetch_today_curve,
     get_zone,
+    interpret_spot_price,
 )
 from src.lib.live_weather import estimate_current_output_mw, fetch_current_weather
 from src.lib.parks_loader import load_parks_index
@@ -274,6 +276,19 @@ if selected_row.empty:
     st.rerun()
 selected_row = selected_row.iloc[0]
 
+# Fetch PVGIS hourly EARLY — used by both Live (typical-vs-now delta) and Historical sections
+with st.spinner("Querying PVGIS…"):
+    try:
+        hourly_data = _fetch_hourly_cached(
+            park_id=selected_park_id,
+            lat=selected_row["lat"],
+            lon=selected_row["lon"],
+            peakpower_mw=selected_row["capacity_mwp"],
+        )
+    except Exception as e:
+        st.error(f"PVGIS request failed: {e}")
+        st.stop()
+
 # ---------------------------------------------------------------------------
 # Park header
 # ---------------------------------------------------------------------------
@@ -360,15 +375,30 @@ if live_weather:
         temp_c=live_weather["temp_c"],
     )
     cf_now = (estimated_mw / float(selected_row["capacity_mwp"]) * 100.0) if selected_row["capacity_mwp"] else 0.0
+
+    # Bridge live ↔ historical : compare to typical 2023 value at this same hour
+    import datetime as _dt
+    _now_utc = _dt.datetime.now(_dt.timezone.utc)
+    _doy = min(_now_utc.timetuple().tm_yday, 365)
+    _hour_idx = (_doy - 1) * 24 + _now_utc.hour
+    typical_mw_this_hour: float | None = None
+    if _hour_idx < len(hourly_data["hourly_production_kwh"]):
+        typical_mw_this_hour = hourly_data["hourly_production_kwh"][_hour_idx] / 1000.0
+    delta_label = f"{cf_now:.0f}% of capacity"
+    if typical_mw_this_hour and typical_mw_this_hour > 0.5:
+        d = (estimated_mw - typical_mw_this_hour) / typical_mw_this_hour * 100.0
+        delta_label = f"{d:+.0f}% vs typical for this hour"
+
     l3.metric(
         "Output (live est.)",
         f"{estimated_mw:,.1f} MW",
-        delta=f"{cf_now:.0f}% of capacity",
+        delta=delta_label,
         delta_color="off",
         help=(
-            "Live estimate from public data only. "
-            "Formula: capacity × (GHI/1000) × (1 − loss%) × temperature_derating. "
-            "Accuracy ±15% vs operator's metered output."
+            f"Live estimate from current GHI + temperature. ±15% vs operator's meter. "
+            f"Typical {DATA_YEAR} for this hour : "
+            f"{typical_mw_this_hour:.1f} MW." if typical_mw_this_hour else
+            "Live estimate from current GHI + temperature. ±15% vs operator's meter."
         ),
     )
 else:
@@ -376,11 +406,15 @@ else:
     l2.metric("Air temp (live)", "—")
     l3.metric("Output (live est.)", "—")
 
+spot_context = None
 if live_spot and live_spot.get("price_eur_mwh") is not None:
     spot_price = live_spot["price_eur_mwh"]
+    spot_context = interpret_spot_price(spot_price, live_zone)
     l4.metric(
         "Spot price (live)",
         f"{spot_price:,.1f} €/MWh",
+        delta=spot_context["label"],
+        delta_color="off",
         help=f"Day-ahead zone {live_zone} · {live_spot['time_iso'][:16]} UTC · source energy-charts.info",
     )
 
@@ -396,6 +430,103 @@ if live_spot and live_spot.get("price_eur_mwh") is not None:
 else:
     l4.metric("Spot price (live)", "—", help=f"Zone {live_zone or '—'} not available right now.")
     l5.metric("Revenue/h (live est.)", "—")
+
+# Contextual disclaimer when spot ≤ 0 — explains negative prices / Italy floor
+if spot_context and spot_context.get("warn"):
+    label = spot_context["label"]
+    if label == "italian floor":
+        bg = "rgba(234, 179, 8, 0.10)"
+        border = "rgba(234, 179, 8, 0.4)"
+        title = "Italian regulatory floor active"
+    elif label == "negative":
+        bg = "rgba(220, 38, 38, 0.10)"
+        border = "rgba(220, 38, 38, 0.4)"
+        title = "Negative spot price — solar cannibalisation"
+    else:
+        bg = "rgba(232, 228, 214, 0.05)"
+        border = "rgba(232, 228, 214, 0.20)"
+        title = "Near-zero spot price"
+    st.markdown(
+        f"""
+        <div style="
+            background: {bg}; border: 1px solid {border}; border-radius: 10px;
+            padding: 14px 18px; margin: 10px 0 16px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+            color: #cbd5e1; line-height: 1.5;">
+          <div style="font-weight: 600; color: #f1f5f9; margin-bottom: 4px; letter-spacing: 0.04em;">
+            ▸ {title}
+          </div>
+          {spot_context['explain']}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# Today's spot price curve — visualises the morning solar collapse
+if live_zone:
+    today_curve = fetch_today_curve(live_zone)
+    if today_curve and today_curve.get("prices"):
+        import datetime as _dt2
+        ts_list = today_curve["timestamps"]
+        prices_list = today_curve["prices"]
+        x_dates = [_dt2.datetime.fromtimestamp(t, _dt2.timezone.utc) for t in ts_list]
+
+        fig_today = go.Figure()
+        # Negative-price area highlighted in red
+        fig_today.add_trace(
+            go.Scatter(
+                x=x_dates,
+                y=prices_list,
+                mode="lines",
+                line=dict(color="#e8e4d6", width=1.6, shape="spline", smoothing=0.3),
+                fill="tozeroy",
+                fillcolor="rgba(232, 228, 214, 0.08)",
+                hovertemplate="%{x|%H:%M} UTC · %{y:,.1f} €/MWh<extra></extra>",
+                name="Spot",
+            )
+        )
+        # Zero line
+        fig_today.add_hline(
+            y=0, line_dash="dot", line_color="rgba(232, 228, 214, 0.3)", line_width=1
+        )
+        # Mark current hour
+        if live_spot:
+            now_dt = _dt2.datetime.now(_dt2.timezone.utc)
+            fig_today.add_trace(
+                go.Scatter(
+                    x=[now_dt],
+                    y=[live_spot["price_eur_mwh"]],
+                    mode="markers",
+                    marker=dict(size=10, color="#84cc16", line=dict(color="#0a0a0a", width=2)),
+                    hovertemplate="now · %{y:,.1f} €/MWh<extra></extra>",
+                    name="Now",
+                )
+            )
+
+        fig_today.update_layout(
+            title=dict(
+                text=f"Today's spot curve · zone {live_zone}",
+                font=dict(color="#cbd5e1", size=12, family="Geist", weight=500),
+                x=0.0, xanchor="left", pad=dict(b=4),
+            ),
+            height=170,
+            margin=dict(l=0, r=0, t=32, b=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False, tickfont=dict(color="#7a7464", size=9, family="JetBrains Mono"), tickformat="%H:%M"),
+            yaxis=dict(
+                gridcolor="rgba(232, 228, 214, 0.06)",
+                tickfont=dict(color="#7a7464", size=9, family="JetBrains Mono"),
+                title=None, ticksuffix=" €",
+            ),
+            showlegend=False,
+            hoverlabel=dict(
+                bgcolor="rgba(13, 13, 13, 0.95)",
+                bordercolor="rgba(232, 228, 214, 0.4)",
+                font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
+            ),
+        )
+        st.plotly_chart(fig_today, width="stretch", config={"displayModeBar": False})
 
 st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
@@ -428,18 +559,6 @@ components.html(
 # ---------------------------------------------------------------------------
 # Detail panel — fetch PVGIS and render
 # ---------------------------------------------------------------------------
-
-with st.spinner("Querying PVGIS…"):
-    try:
-        hourly_data = _fetch_hourly_cached(
-            park_id=selected_park_id,
-            lat=selected_row["lat"],
-            lon=selected_row["lon"],
-            peakpower_mw=selected_row["capacity_mwp"],
-        )
-    except Exception as e:
-        st.error(f"PVGIS request failed: {e}")
-        st.stop()
 
 today_est = estimate_for_date(
     hourly_kwh=hourly_data["hourly_production_kwh"],
