@@ -68,44 +68,53 @@ def backtest_recent_period(
     return _combine(hourly_prod_mwh, prices["prices_eur_mwh"], (end - start).days + 1)
 
 
-def backtest_2023_same_period(
-    pvgis_hourly_kwh: list[float],
+def backtest_baseline_period(
+    baseline_hourly_kwh: list[float],
+    baseline_year: int,
     zone: str | None,
     start: date,
     end: date,
 ) -> dict | None:
-    """Backtest the same calendar week/month in 2023 using cached PVGIS + 2023 prices.
+    """Backtest the same calendar week/month in a chosen baseline year.
+
+    Slices the cached pvlib year-of-data (2023, 2024…) at the same calendar window,
+    multiplies by spot prices for that year window. Lets the caller compare any
+    pair of years.
 
     Args :
-        pvgis_hourly_kwh : 8760 hourly values from fetch_pvgis_hourly (year 2023).
-        zone : bidding zone for prices (None → no revenue).
-        start, end : the recent dates — we map week-of-year to 2023.
+        baseline_hourly_kwh : 8760 hourly values for `baseline_year` (from solar_model).
+        baseline_year : the year of the cached production data.
+        zone : bidding zone for prices.
+        start, end : the recent window — mapped to the same calendar in baseline_year.
     """
-    # Align to 2023 same week-of-year
-    start_2023 = date(2023, start.month, start.day)
-    end_2023 = date(2023, end.month, end.day)
+    bl_start = date(baseline_year, start.month, start.day)
+    bl_end = date(baseline_year, end.month, end.day)
 
-    # Slice PVGIS hourly array
-    doy_start = start_2023.timetuple().tm_yday
-    doy_end = end_2023.timetuple().tm_yday
-    if doy_end < doy_start or doy_end > 365:
+    doy_start = bl_start.timetuple().tm_yday
+    doy_end = bl_end.timetuple().tm_yday
+    if doy_end < doy_start or doy_end > 366:
         return None
     idx_start = (doy_start - 1) * 24
     idx_end = doy_end * 24
-    if idx_end > len(pvgis_hourly_kwh):
-        idx_end = len(pvgis_hourly_kwh)
+    if idx_end > len(baseline_hourly_kwh):
+        idx_end = len(baseline_hourly_kwh)
 
-    sliced_kwh = pvgis_hourly_kwh[idx_start:idx_end]
+    sliced_kwh = baseline_hourly_kwh[idx_start:idx_end]
     sliced_mwh = [x / 1000.0 for x in sliced_kwh]
 
     if not zone:
         return _summary_no_prices(sliced_mwh, (end - start).days + 1)
 
-    prices_2023 = fetch_period_prices(zone, str(start_2023), str(end_2023))
-    if not prices_2023:
+    prices_bl = fetch_period_prices(zone, str(bl_start), str(bl_end))
+    if not prices_bl:
         return _summary_no_prices(sliced_mwh, (end - start).days + 1)
 
-    return _combine(sliced_mwh, prices_2023["prices_eur_mwh"], (end - start).days + 1)
+    return _combine(sliced_mwh, prices_bl["prices_eur_mwh"], (end - start).days + 1)
+
+
+# Legacy alias for backward compat
+def backtest_2023_same_period(pvgis_hourly_kwh, zone, start, end):
+    return backtest_baseline_period(pvgis_hourly_kwh, 2023, zone, start, end)
 
 
 def _combine(hourly_prod_mwh: list[float], hourly_prices: list[float | None], days: int) -> dict:
