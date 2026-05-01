@@ -32,7 +32,9 @@ from src.lib.electricity_prices import (
     compute_revenue_metrics,
     fetch_current_spot_price,
     fetch_hourly_prices,
+    fetch_period_prices,
     fetch_today_curve,
+    get_fallback_price,
     get_zone,
     interpret_spot_price,
 )
@@ -42,9 +44,8 @@ from src.lib.reported_production import load_reported_production
 from src.lib.solar_model import compute_hourly_production, estimate_instant_output_mw
 from src.lib.solar_metrics import (
     capacity_factor_annual,
-    estimate_for_date,
     hourly_to_daily,
-    monthly_aggregates,
+    monthly_aggregates_from_timestamps,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,8 +73,8 @@ SEVERITY_LABELS = {
 }
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-AVAILABLE_YEARS = [2025, 2024, 2023]   # most recent first
-DEFAULT_YEAR = 2025
+ARCHIVE_LAG_DAYS = 6           # Open-Meteo Archive publishes with ~5-day lag, +1 safety
+T12M_DAYS = 365
 
 COORD_OVERRIDES_PATH = _ROOT / "data" / "coord_overrides.yaml"
 
@@ -250,11 +251,22 @@ reported_map = _load_reported()
 # Top metrics
 # ---------------------------------------------------------------------------
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Solar parks", f"{len(parks_df)}")
-c2.metric("Installed capacity", f"{parks_df['capacity_mwp'].sum():,.0f} MWp")
-c3.metric("Countries", f"{parks_df['country'].nunique()}")
-c4.metric("With production delta", f"{len(reported_map)} of {len(parks_df)}")
+c1, c2, c3 = st.columns(3)
+c1.metric(
+    "Total parks tracked",
+    f"{len(parks_df)}",
+    help="Solar PV assets owned directly by Allianz Capital Partners with public press releases.",
+)
+c2.metric(
+    "Combined nameplate capacity",
+    f"{parks_df['capacity_mwp'].sum():,.0f} MWp",
+    help="Sum of peak DC capacity across all parks. Each park's capacity is sourced from its acquisition press release.",
+)
+c3.metric(
+    "Countries",
+    f"{parks_df['country'].nunique()}",
+    help=", ".join(sorted(parks_df["country"].unique())),
+)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -300,31 +312,56 @@ if selected_row.empty:
     st.rerun()
 selected_row = selected_row.iloc[0]
 
-# Year selector — pvlib reconstructs any of 2023/2024/2025 uniformly
-yr_col, _ = st.columns([1, 4])
-with yr_col:
-    DATA_YEAR = st.selectbox(
-        "Reference year",
-        options=AVAILABLE_YEARS,
-        index=AVAILABLE_YEARS.index(DEFAULT_YEAR),
-        format_func=lambda y: f"Year {y}",
-        key=f"year-select-{selected_park_id}",
-        label_visibility="collapsed",
+# T12M rolling window — last 12 months of available data
+import datetime as _dt_mod
+_today = _dt_mod.date.today()
+T12M_END = _today - _dt_mod.timedelta(days=ARCHIVE_LAG_DAYS)
+T12M_START = T12M_END - _dt_mod.timedelta(days=T12M_DAYS - 1)
+
+# Same window 1 year before for year-on-year comparison
+T12M_END_PREV = T12M_END - _dt_mod.timedelta(days=365)
+T12M_START_PREV = T12M_START - _dt_mod.timedelta(days=365)
+
+# Compute production over T12M and the previous T12M
+from src.lib.solar_model import compute_period_production
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _compute_t12m_cached(park_id, lat, lon, capacity, start_iso, end_iso):
+    return compute_period_production(
+        lat=lat, lon=lon, capacity_mwp=capacity,
+        start_date=_dt_mod.date.fromisoformat(start_iso),
+        end_date=_dt_mod.date.fromisoformat(end_iso),
     )
 
-# Fetch hourly production via pvlib (Open-Meteo Archive + PVGIS-grade physics)
-with st.spinner(f"Computing pvlib model for {DATA_YEAR}…"):
-    hourly_data = _fetch_hourly_cached(
+with st.spinner("Computing trailing 12 months…"):
+    period_data = _compute_t12m_cached(
         park_id=selected_park_id,
         lat=float(selected_row["lat"]),
         lon=float(selected_row["lon"]),
-        peakpower_mw=float(selected_row["capacity_mwp"]),
-        year=DATA_YEAR,
+        capacity=float(selected_row["capacity_mwp"]),
+        start_iso=T12M_START.isoformat(),
+        end_iso=T12M_END.isoformat(),
+    )
+    period_data_prev = _compute_t12m_cached(
+        park_id=selected_park_id + "_prev",
+        lat=float(selected_row["lat"]),
+        lon=float(selected_row["lon"]),
+        capacity=float(selected_row["capacity_mwp"]),
+        start_iso=T12M_START_PREV.isoformat(),
+        end_iso=T12M_END_PREV.isoformat(),
     )
 
-if not hourly_data:
-    st.error(f"Could not compute production for {selected_row['name']} {DATA_YEAR}")
+if not period_data:
+    st.error(f"Could not compute T12M production for {selected_row['name']}")
     st.stop()
+
+# Convert to the shape the rest of the panel expects
+hourly_data = {
+    "hourly_production_kwh": period_data["hourly_production_kwh"],
+    "hourly_irradiance_wm2": [],   # not needed downstream
+    "timestamps": period_data["timestamps"],
+}
+DATA_YEAR_LABEL = f"{T12M_START.isoformat()} → {T12M_END.isoformat()}"
 
 # ---------------------------------------------------------------------------
 # Park header
@@ -419,14 +456,18 @@ if live_weather:
     )
     cf_now = (estimated_mw / float(selected_row["capacity_mwp"]) * 100.0) if selected_row["capacity_mwp"] else 0.0
 
-    # Bridge live ↔ historical : compare to typical 2023 value at this same hour
+    # Bridge live ↔ historical : compare to "same hour 1 year ago" (prior-year T12M window)
     import datetime as _dt
     _now_utc = _dt.datetime.now(_dt.timezone.utc)
-    _doy = min(_now_utc.timetuple().tm_yday, 365)
-    _hour_idx = (_doy - 1) * 24 + _now_utc.hour
     typical_mw_this_hour: float | None = None
-    if _hour_idx < len(hourly_data["hourly_production_kwh"]):
-        typical_mw_this_hour = hourly_data["hourly_production_kwh"][_hour_idx] / 1000.0
+    if period_data_prev:
+        # find the index in hourly_data_prev whose timestamp matches (now - 1 year) at the hour
+        target = _now_utc - _dt.timedelta(days=365)
+        target_iso_prefix = target.strftime("%Y-%m-%dT%H")
+        for i, ts in enumerate(period_data_prev["timestamps"]):
+            if ts.startswith(target_iso_prefix):
+                typical_mw_this_hour = period_data_prev["hourly_production_kwh"][i] / 1000.0
+                break
     delta_label = f"{cf_now:.0f}% of capacity"
     if typical_mw_this_hour and typical_mw_this_hour > 0.5:
         d = (estimated_mw - typical_mw_this_hour) / typical_mw_this_hour * 100.0
@@ -439,8 +480,7 @@ if live_weather:
         delta_color="off",
         help=(
             f"Live estimate from current GHI + temperature. ±15% vs operator's meter. "
-            f"Typical {DATA_YEAR} for this hour : "
-            f"{typical_mw_this_hour:.1f} MW." if typical_mw_this_hour else
+            f"Same hour one year ago : {typical_mw_this_hour:.1f} MW." if typical_mw_this_hour else
             "Live estimate from current GHI + temperature. ±15% vs operator's meter."
         ),
     )
@@ -603,17 +643,31 @@ components.html(
 # Detail panel — fetch PVGIS and render
 # ---------------------------------------------------------------------------
 
-today_est = estimate_for_date(
-    hourly_kwh=hourly_data["hourly_production_kwh"],
-    irradiance_wm2=hourly_data["hourly_irradiance_wm2"],
-)
-
-annual_kwh = hourly_data["annual_total_kwh"]
+# T12M annual aggregate
+annual_kwh = sum(hourly_data["hourly_production_kwh"])
 annual_mwh = annual_kwh / 1000.0
 cf_annual = capacity_factor_annual(
     hourly_data["hourly_production_kwh"], peakpower_mw=selected_row["capacity_mwp"]
 )
-monthly = monthly_aggregates(hourly_data["hourly_production_kwh"], year=DATA_YEAR)
+monthly = monthly_aggregates_from_timestamps(
+    hourly_data["hourly_production_kwh"], hourly_data["timestamps"]
+)
+
+# Yesterday's output (J-1 — last full day in T12M data)
+import datetime as _dtmod2
+_yest = T12M_END  # last day in our data window
+_yest_idx_start = (T12M_DAYS - 1) * 24
+_yest_idx_end = T12M_DAYS * 24
+yesterday_kwh = sum(hourly_data["hourly_production_kwh"][_yest_idx_start:_yest_idx_end])
+yesterday_mwh = yesterday_kwh / 1000.0
+
+# Same calendar day 1 year before (from T12M_START_PREV window)
+yest_prev_mwh = None
+if period_data_prev:
+    prev_idx_start = (T12M_DAYS - 1) * 24
+    prev_idx_end = T12M_DAYS * 24
+    yest_prev_kwh = sum(period_data_prev["hourly_production_kwh"][prev_idx_start:prev_idx_end])
+    yest_prev_mwh = yest_prev_kwh / 1000.0
 
 reported = reported_map.get(selected_park_id)
 delta_pct = None
@@ -629,18 +683,18 @@ if reported:
         delta_severity = "red"
 
 # ---------------------------------------------------------------------------
-# HISTORICAL · YEAR {DATA_YEAR} — production from pvlib + Open-Meteo Archive
+# HISTORICAL · last 12 months (T12M rolling)
 # ---------------------------------------------------------------------------
 
 st.markdown(
     f"""
     <div class="section-header">
-      <span class="section-label">Historical · year {DATA_YEAR}</span>
+      <span class="section-label">Historical · last 12 months</span>
       <span class="section-caption">
-        pvlib hourly model fed by Open-Meteo Archive (ECMWF reanalysis,
-        5-day publishing lag). PVGIS-grade physics : Hay-Davies POA transposition,
-        Sandia cell temperature, PVWatts DC + inverter clipping at DC/AC = 1.30.
-        Validated within ±2-5% of PVGIS SARAH-3 on overlapping years.
+        Rolling window <b>{T12M_START.isoformat()} → {T12M_END.isoformat()}</b>.
+        Full pvlib reconstruction (Open-Meteo Archive 5-day lag, Hay-Davies POA,
+        Sandia cell temp, PVWatts DC, inverter clipping, 14% losses).
+        Validated within ±2-5% of PVGIS-grade output.
       </span>
     </div>
     """,
@@ -649,54 +703,104 @@ st.markdown(
 
 m1, m2, m3, m4 = st.columns(4)
 
+# J-1 output with year-on-year comparison
+yest_delta_label = ""
+if yest_prev_mwh and yest_prev_mwh > 0.01:
+    d_yest = (yesterday_mwh - yest_prev_mwh) / yest_prev_mwh * 100.0
+    yest_delta_label = f"{d_yest:+.0f}% vs same day −1 year"
+
 m1.metric(
-    f"Output for {today_est['date'][5:]} ({DATA_YEAR})",
-    f"{today_est['production_kwh'] / 1000:,.1f} MWh",
-    help=f"What the park produced in {DATA_YEAR} on this same calendar day. pvlib hourly model on Open-Meteo Archive weather.",
+    f"Output {_yest.strftime('%d %b')}",
+    f"{yesterday_mwh:,.1f} MWh",
+    delta=yest_delta_label or None,
+    delta_color="off",
+    help=(
+        f"Production for the last full day available ({_yest.isoformat()}). "
+        f"The Open-Meteo Archive lag means today is incomplete; we display the latest closed day. "
+        f"Same day in {_yest.year - 1}: {yest_prev_mwh:,.1f} MWh." if yest_prev_mwh else
+        f"Production for {_yest.isoformat()}, the last fully-available day in the Open-Meteo Archive."
+    ),
 )
 m2.metric(
-    f"Annual output ({DATA_YEAR})",
+    "T12M output",
     f"{annual_mwh:,.0f} MWh",
-    help=f"pvlib reconstruction year-{DATA_YEAR}, hourly Open-Meteo Archive weather, 14% system losses.",
+    help=f"Total production over the rolling 365-day window {T12M_START.isoformat()} → {T12M_END.isoformat()}.",
 )
 m3.metric(
-    f"Capacity factor ({DATA_YEAR})",
+    "Capacity factor (T12M)",
     f"{cf_annual:.1f} %",
-    help="Annual production / (peakpower × 8760 h). Industry benchmark for solar in Europe: 12-18%.",
+    help=(
+        "Capacity factor = annual production / (nameplate capacity × 8 760 h). "
+        "Measures how much of the theoretical maximum the asset achieves over the year. "
+        "European solar benchmarks: 11-13% (northern), 15-18% (Iberia), 19-21% (sun-belt US/Spain south)."
+    ),
 )
 
 if reported:
     m4.metric(
-        "Δ vs operator-reported",
+        "Δ vs operator press release",
         f"{delta_pct:+.1f} %",
         delta=SEVERITY_LABELS[delta_severity],
         delta_color="off",
-        help=f"Reported {float(reported['annual_mwh']):,.0f} MWh ({reported['year']}) — see operator press release.",
+        help=(
+            f"Compares our T12M reconstruction ({annual_mwh:,.0f} MWh) to the operator-reported figure "
+            f"({float(reported['annual_mwh']):,.0f} MWh, {reported['year']}). "
+            "Reasons for non-zero delta: panel degradation since commissioning, real losses different from 14%, "
+            "press-release rounding, geometry assumptions different from reality."
+        ),
     )
 else:
-    m4.metric("Δ vs operator-reported", "—", help="No public production figure available for this park.")
+    m4.metric(
+        "Δ vs operator press release",
+        "—",
+        help=(
+            "No public annual production figure was identified in the operator's press release for this park. "
+            "Common for small / multi-site portfolios."
+        ),
+    )
 
 # ---------------------------------------------------------------------------
 # REVENUE · YEAR 2023 — historical production × historical prices
 # ---------------------------------------------------------------------------
 
 zone = get_zone(selected_row["country"], park_id=selected_park_id)
+fallback_price = get_fallback_price(selected_park_id)
 revenue_metrics: dict = {}
+revenue_source = ""
+period_prices: dict | None = None
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_period_prices_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
+    return fetch_period_prices(zone, start_iso, end_iso)
+
 if zone:
-    prices = _fetch_prices_cached(zone, DATA_YEAR)
-    if prices:
+    period_prices = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
+    if period_prices and period_prices.get("prices_eur_mwh"):
         revenue_metrics = compute_revenue_metrics(
             hourly_production_kwh=hourly_data["hourly_production_kwh"],
-            hourly_prices_eur_mwh=prices,
+            hourly_prices_eur_mwh=period_prices["prices_eur_mwh"],
         )
+        revenue_source = f"hourly day-ahead zone {zone}"
+
+# Fallback : flat annual avg price for US/Ireland zones not on energy-charts
+if not revenue_metrics and fallback_price is not None:
+    flat_prices = [fallback_price] * len(hourly_data["hourly_production_kwh"])
+    revenue_metrics = compute_revenue_metrics(
+        hourly_production_kwh=hourly_data["hourly_production_kwh"],
+        hourly_prices_eur_mwh=flat_prices,
+    )
+    revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
+
+_revenue_caption = revenue_source or f"Zone {zone or '—'} not available — revenue cannot be computed."
 
 st.markdown(
     f"""
     <div class="section-header">
-      <span class="section-label">Revenue · year {DATA_YEAR}</span>
+      <span class="section-label">Revenue · last 12 months</span>
       <span class="section-caption">
-        What the park <em>actually earned</em> in {DATA_YEAR} : hourly production × hourly day-ahead price
-        on its bidding zone (zone {zone or '—'}). Captures the solar cannibalisation effect.
+        Hourly production × hourly day-ahead spot price for each of the 8&nbsp;760 hours
+        in the rolling year ({T12M_START.isoformat()} → {T12M_END.isoformat()}).
+        Source : <b>{_revenue_caption}</b>.
       </span>
     </div>
     """,
@@ -707,30 +811,53 @@ r1, r2, r3, r4 = st.columns(4)
 
 if revenue_metrics:
     r1.metric(
-        f"Total revenue ({DATA_YEAR})",
+        "Total revenue (T12M)",
         f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
-        help=f"Hourly production × day-ahead price (zone {zone}). Source: energy-charts.info / ENTSO-E.",
+        help=(
+            "Total euros earned over the last 12 months. "
+            "Computed by summing, for each hour : production_MWh × spot_price_EUR_per_MWh. "
+            "Captures actual market conditions hour by hour, including negative spot prices and the regulatory floor at 0 €/MWh in Italy."
+        ),
     )
     r2.metric(
-        f"Effective sale price ({DATA_YEAR})",
+        "Effective sale price (T12M)",
         f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
-        help="Production-weighted average price actually realised.",
+        help=(
+            "The price actually realised on each MWh sold, weighted by when production happened. "
+            "Formula : total_revenue / total_production_mwh. "
+            "Differs from the simple market average because the park doesn't produce evenly — it produces a lot at midday "
+            "(when prices are pushed down by solar oversupply) and nothing at night (when prices spike). "
+            "This is the asset's true revenue per MWh — what really lands on the cash flow."
+        ),
     )
     r3.metric(
-        f"Day-ahead avg ({DATA_YEAR})",
+        "Day-ahead avg (T12M)",
         f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
-        help=f"Simple time-average of zone {zone} hourly prices in {DATA_YEAR}.",
+        help=(
+            "Simple arithmetic mean of all 8 760 hourly day-ahead market prices on the asset's bidding zone. "
+            "Reference market level — what the typical hour was priced at on average. "
+            "An asset would earn this much per MWh ONLY if it produced flat across all hours. "
+            "Solar parks earn less because their generation is concentrated in low-price hours."
+        ),
     )
+    cann = revenue_metrics["cannibalization_pct"]
     r4.metric(
-        f"Cannibalisation ({DATA_YEAR})",
-        f"{revenue_metrics['cannibalization_pct']:+.1f} %",
-        help="(Effective − Day-ahead avg) / Day-ahead avg. Negative = solar produces more during low-price hours (typical).",
+        "Cannibalisation (T12M)",
+        f"{cann:+.1f} %",
+        help=(
+            "Difference between the effective sale price and the day-ahead average, in % of the average. "
+            "Formula : (effective − day_ahead_avg) / day_ahead_avg. "
+            "Negative = the asset earns less than the market average per MWh because solar concentrates production at midday "
+            "when oversupply pushes prices down. "
+            "Worsens with the solar penetration rate of the zone — Iberia 2026 typically sees -50 to -80% cannibalisation. "
+            "The risk #1 of merchant solar today, and the main argument for PPAs, batteries, and east/west tracking."
+        ),
     )
 else:
-    r1.metric(f"Total revenue ({DATA_YEAR})", "—", help=f"Zone {zone or '—'} not available on energy-charts.info.")
-    r2.metric(f"Effective sale price ({DATA_YEAR})", "—")
-    r3.metric(f"Day-ahead avg ({DATA_YEAR})", "—")
-    r4.metric(f"Cannibalisation ({DATA_YEAR})", "—")
+    r1.metric("Total revenue (T12M)", "—", help="No price data available for this zone over this window.")
+    r2.metric("Effective sale price (T12M)", "—")
+    r3.metric("Day-ahead avg (T12M)", "—")
+    r4.metric("Cannibalisation (T12M)", "—")
 
 # Source caption
 if reported:
@@ -769,14 +896,16 @@ st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
 # BACKTEST · Recent N days vs {DATA_YEAR} same period
 # ---------------------------------------------------------------------------
 
+_baseline_year_for_backtest = T12M_END.year - 1
+
 st.markdown(
     f"""
     <div class="section-header">
-      <span class="section-label">Backtest · recent vs {DATA_YEAR}</span>
+      <span class="section-label">Backtest · recent vs {_baseline_year_for_backtest}</span>
       <span class="section-caption">
-        Same calendar window in two years. Recent = Open-Meteo archive (last
-        5-day-lag) + 2026 spot prices. Baseline {DATA_YEAR} = pvlib reconstruction +
-        {DATA_YEAR} spot prices. Reveals how the market context for this asset has evolved.
+        Same calendar window, two different years. Recent = Open-Meteo archive (last available days,
+        5-day publishing lag) priced at current spot. Baseline = pvlib reconstruction of {_baseline_year_for_backtest} priced at {_baseline_year_for_backtest} spot.
+        Surfaces how the market context for this asset has evolved over the year.
       </span>
     </div>
     """,
@@ -806,18 +935,20 @@ bt_recent = _backtest_recent_cached(
 bt_old = _backtest_baseline_cached(
     park_id=selected_park_id,
     hourly_kwh_tuple=tuple(hourly_data["hourly_production_kwh"]),
-    baseline_year=DATA_YEAR,
+    baseline_year=_baseline_year_for_backtest,
     zone=bt_zone,
     days=bt_window,
 )
 
 if bt_recent and bt_old:
     bt_start, bt_end = get_recent_window(days=bt_window, end_offset_days=5)
+    bt_old_start = bt_start.replace(year=_baseline_year_for_backtest)
+    bt_old_end = bt_end.replace(year=_baseline_year_for_backtest)
     st.markdown(
         f"<div style='font-family: \"JetBrains Mono\", monospace; font-size: 0.72rem; "
         f"color: var(--text-muted); margin: 8px 0 14px; letter-spacing: 0.04em;'>"
         f"Recent window : <b style='color:var(--text-secondary);'>{bt_start} → {bt_end}</b> · "
-        f"compared to <b style='color:var(--text-secondary);'>{bt_start.replace(year=2023)} → {bt_end.replace(year=2023)}</b>"
+        f"compared to <b style='color:var(--text-secondary);'>{bt_old_start} → {bt_old_end}</b>"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -829,9 +960,9 @@ if bt_recent and bt_old:
     bt1.metric(
         f"Production ({bt_window}d)",
         f"{bt_recent['production_mwh']:,.0f} MWh",
-        delta=f"{delta_prod:+.1f}% vs {DATA_YEAR}",
+        delta=f"{delta_prod:+.1f}% vs {_baseline_year_for_backtest}",
         delta_color="off",
-        help=f"{DATA_YEAR} same window: {bt_old['production_mwh']:,.0f} MWh. Climatic variation between two years.",
+        help=f"{_baseline_year_for_backtest} same window: {bt_old['production_mwh']:,.0f} MWh. Climatic variation between two years.",
     )
 
     # Revenue (the key signal)
@@ -841,9 +972,9 @@ if bt_recent and bt_old:
         bt2.metric(
             f"Revenue ({bt_window}d)",
             f"€ {rev_recent_k:,.0f} k",
-            delta=f"{delta_rev:+.1f}% vs {DATA_YEAR}",
+            delta=f"{delta_rev:+.1f}% vs {_baseline_year_for_backtest}",
             delta_color="off",
-            help=f"{DATA_YEAR} same window: € {bt_old['revenue_eur']/1000:,.0f}k. Captures market evolution.",
+            help=f"{_baseline_year_for_backtest} same window: € {bt_old['revenue_eur']/1000:,.0f}k. Captures market evolution.",
         )
     else:
         bt2.metric(f"Revenue ({bt_window}d)", "—", help=f"Zone {bt_zone or '—'} not available.")
@@ -854,9 +985,9 @@ if bt_recent and bt_old:
         bt3.metric(
             f"Effective price ({bt_window}d)",
             f"{bt_recent['effective_price_eur_mwh']:,.1f} €/MWh",
-            delta=f"{delta_eff:+.1f} vs {DATA_YEAR}",
+            delta=f"{delta_eff:+.1f} vs {_baseline_year_for_backtest}",
             delta_color="off",
-            help=f"{DATA_YEAR} same window: {bt_old['effective_price_eur_mwh']:.1f} €/MWh.",
+            help=f"{_baseline_year_for_backtest} same window: {bt_old['effective_price_eur_mwh']:.1f} €/MWh.",
         )
     else:
         bt3.metric(f"Effective price ({bt_window}d)", "—")
@@ -867,14 +998,93 @@ if bt_recent and bt_old:
         bt4.metric(
             f"Cannibalisation ({bt_window}d)",
             f"{bt_recent['cannibalisation_pct']:+.1f} %",
-            delta=f"{delta_cann:+.1f} pts vs {DATA_YEAR}",
+            delta=f"{delta_cann:+.1f} pts vs {_baseline_year_for_backtest}",
             delta_color="off",
-            help=f"{DATA_YEAR} same window: {bt_old['cannibalisation_pct']:+.1f}%. Negative delta = cannibalisation worsened.",
+            help=f"{_baseline_year_for_backtest} same window: {bt_old['cannibalisation_pct']:+.1f}%. Negative delta = cannibalisation worsened.",
         )
     else:
         bt4.metric(f"Cannibalisation ({bt_window}d)", "—")
+
+    # ----- Daily production + daily revenue, full T12M window -----
+    st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+
+    daily_kwh_t12m = hourly_to_daily(hourly_data["hourly_production_kwh"])
+    daily_mwh_t12m = [v / 1000.0 for v in daily_kwh_t12m]
+    day_dates_t12m = pd.date_range(T12M_START.isoformat(), periods=len(daily_mwh_t12m), freq="D")
+
+    # Daily revenue : per-hour production × per-hour price aggregated to days
+    daily_rev_eur: list[float | None] = []
+    if revenue_metrics and (period_prices and period_prices.get("prices_eur_mwh") or fallback_price is not None):
+        if period_prices and period_prices.get("prices_eur_mwh"):
+            hp = period_prices["prices_eur_mwh"]
+        else:
+            hp = [fallback_price or 0.0] * len(hourly_data["hourly_production_kwh"])
+        hk = hourly_data["hourly_production_kwh"]
+        for d in range(len(daily_mwh_t12m)):
+            i0 = d * 24
+            i1 = i0 + 24
+            rev = sum((hk[i] / 1000.0) * (hp[i] if hp[i] is not None else 0.0) for i in range(i0, min(i1, len(hk))))
+            daily_rev_eur.append(rev)
+
+    fig_ts = go.Figure()
+    fig_ts.add_trace(go.Scatter(
+        x=day_dates_t12m,
+        y=daily_mwh_t12m,
+        name="Daily production",
+        mode="lines",
+        line=dict(color="#e8e4d6", width=1.6, shape="spline", smoothing=0.3),
+        fill="tozeroy",
+        fillcolor="rgba(232, 228, 214, 0.08)",
+        hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
+        yaxis="y",
+    ))
+    if daily_rev_eur:
+        fig_ts.add_trace(go.Scatter(
+            x=day_dates_t12m,
+            y=[r / 1000.0 for r in daily_rev_eur],
+            name="Daily revenue",
+            mode="lines",
+            line=dict(color="rgba(125, 211, 252, 0.85)", width=1.4, shape="spline", smoothing=0.3),
+            hovertemplate="%{x|%d %b %Y} · € %{y:,.1f} k<extra></extra>",
+            yaxis="y2",
+        ))
+    fig_ts.update_layout(
+        title=dict(
+            text=f"Daily production & revenue · T12M ({T12M_START.isoformat()} → {T12M_END.isoformat()})",
+            font=dict(color="#f1f5f9", size=13, family="Geist", weight=500),
+            x=0.0, xanchor="left", pad=dict(b=8),
+        ),
+        height=260,
+        margin=dict(l=0, r=0, t=44, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False, tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"), tickformat="%b %y", dtick="M1"),
+        yaxis=dict(
+            gridcolor="rgba(148, 163, 184, 0.06)",
+            tickfont=dict(color="#cbd5e1", size=10, family="JetBrains Mono"),
+            ticksuffix=" MWh",
+            title=None,
+        ),
+        yaxis2=dict(
+            overlaying="y", side="right", showgrid=False,
+            tickfont=dict(color="rgba(125, 211, 252, 0.95)", size=10, family="JetBrains Mono"),
+            ticksuffix=" k€",
+            title=None,
+        ),
+        legend=dict(
+            orientation="h", x=0, y=1.18, xanchor="left", yanchor="top",
+            font=dict(color="#94a3b8", size=10, family="JetBrains Mono"),
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        hoverlabel=dict(
+            bgcolor="rgba(13, 19, 32, 0.95)",
+            bordercolor="rgba(232, 228, 214, 0.4)",
+            font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
+        ),
+    )
+    st.plotly_chart(fig_ts, width="stretch", config={"displayModeBar": False})
 elif bt_recent and not bt_old:
-    st.info("2023 backtest unavailable for this zone.")
+    st.info(f"{_baseline_year_for_backtest} backtest unavailable for this zone.")
 elif not bt_recent:
     st.info("Recent backtest unavailable — Open-Meteo archive or spot prices fetch failed.")
 
@@ -885,10 +1095,10 @@ elif not bt_recent:
 st.markdown(
     f"""
     <div class="section-header">
-      <span class="section-label">Time series · year {DATA_YEAR}</span>
+      <span class="section-label">Time series · last 12 months</span>
       <span class="section-caption">
-        Daily and monthly breakdowns of {DATA_YEAR} production. Reveals seasonality
-        and the typical climatic shape of the site.
+        Daily and monthly breakdowns of T12M production ({T12M_START.isoformat()} → {T12M_END.isoformat()}).
+        Reveals seasonality and the typical climatic shape of the site.
       </span>
     </div>
     """,
@@ -897,7 +1107,7 @@ st.markdown(
 
 daily_kwh = hourly_to_daily(hourly_data["hourly_production_kwh"])
 daily_mwh = [v / 1000.0 for v in daily_kwh]
-day_dates = pd.date_range(f"{DATA_YEAR}-01-01", periods=365, freq="D")
+day_dates = pd.date_range(T12M_START.isoformat(), periods=len(daily_mwh), freq="D")
 
 # Light 7-day smoothing for a clean curve (replaces the dual-line previous version)
 import numpy as np
@@ -921,7 +1131,7 @@ fig_daily.add_trace(
 
 fig_daily.update_layout(
     title=dict(
-        text=f"Daily output · year {DATA_YEAR}",
+        text="Daily output · T12M",
         font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
         x=0.0, xanchor="left", pad=dict(b=8),
     ),
@@ -957,11 +1167,12 @@ st.plotly_chart(fig_daily, width="stretch", config={"displayModeBar": False})
 
 st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
+monthly_labels = [m["label"] for m in monthly]
 monthly_mwh = [m["production_mwh"] for m in monthly]
 fig_monthly = go.Figure()
 fig_monthly.add_trace(
     go.Bar(
-        x=MONTH_NAMES,
+        x=monthly_labels,
         y=monthly_mwh,
         marker=dict(
             color="rgba(232, 228, 214, 0.78)",
@@ -987,7 +1198,7 @@ if reported:
 
 fig_monthly.update_layout(
     title=dict(
-        text=f"Monthly production · year {DATA_YEAR}",
+        text="Monthly production · T12M",
         font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
         x=0.0, xanchor="left", pad=dict(b=8),
     ),
@@ -1015,17 +1226,10 @@ fig_monthly.update_layout(
 st.plotly_chart(fig_monthly, width="stretch", config={"displayModeBar": False})
 
 # ---------------------------------------------------------------------------
-# Reset button
+# About this data
 # ---------------------------------------------------------------------------
 
 st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
-if st.button("← Back to globe", type="secondary"):
-    st.session_state.pop("selected_park_id", None)
-    st.rerun()
-
-# ---------------------------------------------------------------------------
-# About this data
-# ---------------------------------------------------------------------------
 
 with st.expander("How to read the sections", expanded=False):
     st.markdown(
@@ -1036,15 +1240,16 @@ Each section header makes the source and the time horizon explicit.
 | Section | Horizon | Sources | Why it's there |
 |---|---|---|---|
 | **Live · right now** | This hour, refreshed every 15 min | Open-Meteo (irradiance + temp) · ENTSO-E day-ahead spot | Snapshot of what the park is doing **as you read this**. Useful for "is the park performing today?" |
-| **Historical · year {DATA_YEAR}** | Full calendar year {DATA_YEAR} | pvlib + Open-Meteo Archive (ECMWF reanalysis, 5-day lag, covers 2023/2024/2025 uniformly) | What the park produced in {DATA_YEAR}. PVGIS-grade physics. Reference for annual capacity factor + delta vs operator. |
-| **Revenue · year {DATA_YEAR}** | Full calendar year {DATA_YEAR} | pvlib production × ENTSO-E day-ahead price (hour by hour) | What the park earned in {DATA_YEAR}. Captures cannibalisation. |
-| **Time series · year {DATA_YEAR}** | Same year, 365 days × 24 h | Same as Historical | Visualises seasonality. |
+| **Historical · last 12 months** | Rolling T12M ({T12M_START.isoformat()} → {T12M_END.isoformat()}) | pvlib + Open-Meteo Archive (ECMWF reanalysis, 5-day lag) | What the park produced in the most recent 365 days. PVGIS-grade physics. Reference for annual capacity factor + delta vs operator. |
+| **Revenue · last 12 months** | Same T12M window | pvlib production × hourly day-ahead price (or US/IE flat fallback) | What the park earned in the trailing year. Captures cannibalisation. |
+| **Backtest · recent vs prior year** | Last 7-30 days vs same window prior year | pvlib + spot prices, both years | How market context for this asset has evolved year-on-year. |
+| **Time series · last 12 months** | Same T12M window, daily and monthly | Same as Historical | Visualises seasonality. |
 
 **Why both Live and Historical ?**
 - Live = is the park healthy today ? (compares to typical climatic conditions)
 - Historical = how did it run over a full year ? (the only horizon you can compute revenue / capacity factor on)
 
-A live MW number alone is not actionable for an analyst. A 2023 capacity factor alone is missing today's market context. **Both together** = the full picture.
+A live MW number alone is not actionable for an analyst. A capacity factor alone is missing today's market context. **Both together** = the full picture.
 
 ---
 

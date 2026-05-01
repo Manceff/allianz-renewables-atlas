@@ -29,10 +29,24 @@ COUNTRY_TO_ZONE: dict[str, str] = {
     "FR": "FR",                # France
     "IT": "IT-South",          # Italie sud (default — Brindisi, SiSen, Foggia)
     "DE": "DE-LU",             # Germany / Luxembourg
-    # IE (Ireland SEM) intentionally absent : energy-charts.info doesn't
-    # currently publish prices for IE-SEM. Falls back to "—" with explicit help.
-    # US (ERCOT, CAISO) absent too : energy-charts is Europe only.
-    # Future : connect ENTSO-E API direct or EIA for full coverage.
+    "IE": "GB",                # SEM not in energy-charts → use GB proxy (highly correlated)
+    # US (ERCOT, CAISO) below via fallback (no hourly source on energy-charts)
+}
+
+# Fallback annual average prices when hourly data is not available (€/MWh).
+# Sources : ERCOT West Hub 2024 settlement avg, CAISO SP15 2024, public reports.
+# Used as a flat constant when the hourly API doesn't cover the zone.
+FALLBACK_ANNUAL_PRICES_EUR_MWH: dict[str, float] = {
+    "US-ERCOT": 32.0,    # Galloway 2 (Texas) — ERCOT West Hub 2024 avg ≈ $35/MWh, EUR conv 0.91
+    "US-CAISO": 56.0,    # Lotus (California) — CAISO SP15 2024 avg ≈ $62/MWh
+    "IE-SEM":   85.0,    # Elgin (Ireland) — SEMOpx DAM avg 2024-2025 ≈ €85/MWh
+}
+
+# US/IE-zone hardcoded mapping (no real-time API — flat-price fallback only)
+PARK_FALLBACK_ZONE: dict[str, str] = {
+    "galloway-2": "US-ERCOT",
+    "lotus-solar-farm": "US-CAISO",
+    "elgin-ireland-191": "IE-SEM",
 }
 
 # Override per park_id when we know the precise zone (e.g. Manzano = North Italy)
@@ -49,6 +63,14 @@ def get_zone(country: str, park_id: str | None = None) -> str | None:
     if park_id and park_id in PARK_ZONE_OVERRIDE:
         return PARK_ZONE_OVERRIDE[park_id]
     return COUNTRY_TO_ZONE.get(country)
+
+
+def get_fallback_price(park_id: str) -> float | None:
+    """Return a flat €/MWh constant for parks not covered by the hourly API."""
+    fallback_zone = PARK_FALLBACK_ZONE.get(park_id)
+    if fallback_zone:
+        return FALLBACK_ANNUAL_PRICES_EUR_MWH.get(fallback_zone)
+    return None
 
 
 ITALIAN_ZONES = {"IT-North", "IT-Centre-North", "IT-Centre-South", "IT-South", "IT-Sicily", "IT-Sardinia", "IT-Calabria"}

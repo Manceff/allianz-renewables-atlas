@@ -82,9 +82,9 @@
       .pointLat("lat")
       .pointLng("lng")
       .pointColor(() => "#e8e4d6")
-      .pointAltitude(0.014)
-      .pointRadius(0.45)
-      .pointResolution(20)
+      .pointAltitude(0.025)
+      .pointRadius(0.85)
+      .pointResolution(24)
       .pointLabel(d => `
         <div class="label-card">
           <div class="lbl-name">${d.name}</div>
@@ -96,10 +96,10 @@
       .ringLat("lat")
       .ringLng("lng")
       .ringColor(() => "rgba(232, 228, 214, 0.55)")
-      .ringMaxRadius(2.0)
-      .ringPropagationSpeed(0.7)
-      .ringRepeatPeriod(2200)
-      .ringAltitude(0.003)
+      .ringMaxRadius(3.5)
+      .ringPropagationSpeed(0.9)
+      .ringRepeatPeriod(2400)
+      .ringAltitude(0.006)
       .onPointClick(point => {
         if (point && point.id) {
           // Smooth zoom + tilt to the selected park

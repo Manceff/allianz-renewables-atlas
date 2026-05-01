@@ -38,6 +38,46 @@ def hourly_heatmap_matrix(hourly_kwh: Sequence[float]) -> np.ndarray:
     return arr.reshape(DAYS_NON_LEAP, HOURS_PER_DAY).T
 
 
+def monthly_aggregates_from_timestamps(
+    hourly_kwh: Sequence[float],
+    timestamps: Sequence[str],
+) -> list[dict]:
+    """Group hourly production by calendar month using ISO timestamps.
+
+    Returns list of dicts ordered by appearance, each {label, year, month, production_mwh, days}.
+    Suitable for periods that span 2 calendar years (T12M rolling window).
+    """
+    from datetime import datetime as _dt
+    buckets: dict[tuple[int, int], dict] = {}
+    order: list[tuple[int, int]] = []
+    for kwh, ts in zip(hourly_kwh, timestamps):
+        try:
+            d = _dt.fromisoformat(ts.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        key = (d.year, d.month)
+        if key not in buckets:
+            buckets[key] = {"year": d.year, "month": d.month, "production_kwh": 0.0, "hours": 0}
+            order.append(key)
+        buckets[key]["production_kwh"] += float(kwh or 0)
+        buckets[key]["hours"] += 1
+
+    out = []
+    for key in order:
+        b = buckets[key]
+        out.append({
+            "label": f"{MONTH_LABELS[b['month']]} {str(b['year'])[-2:]}",
+            "year": b["year"],
+            "month": b["month"],
+            "production_mwh": b["production_kwh"] / 1000.0,
+            "days": b["hours"] / 24,
+        })
+    return out
+
+
+MONTH_LABELS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
 def monthly_aggregates(hourly_kwh: Sequence[float], year: int = 2019) -> list[dict]:
     """Pour chaque mois : production totale (MWh) + capacity factor (%).
 
