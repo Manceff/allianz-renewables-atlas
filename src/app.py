@@ -176,8 +176,17 @@ def _backtest_baseline_cached(
 # ---------------------------------------------------------------------------
 
 
-def _build_satellite_html(lat: float, lon: float, label: str) -> str:
+def _build_satellite_html(lat: float, lon: float, label: str, sites_count: int = 1) -> str:
+    """Render a satellite map.
+
+    For single-site parks : zoom 14, single marker on the panels.
+    For multi-site portfolios (sites_count > 1) : zoom 8, draw a 25-km radius circle around the
+    centroid + scatter `sites_count` random sub-markers inside it as a visual proxy. Honest
+    disclaimer: the exact sub-site addresses are not public.
+    """
     label_safe = label.replace("'", "&#39;").replace('"', "&quot;")
+    multi = sites_count > 1
+    initial_zoom = 8 if multi else 14
     return f"""
 <!DOCTYPE html>
 <html>
@@ -207,19 +216,49 @@ def _build_satellite_html(lat: float, lon: float, label: str) -> str:
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   const map = L.map('map', {{ zoomControl: true, attributionControl: true }})
-    .setView([{lat}, {lon}], 14);
+    .setView([{lat}, {lon}], {initial_zoom});
   L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',
     {{ maxZoom: 18, attribution: 'Esri, Maxar, Earthstar Geographics' }}
   ).addTo(map);
-  L.circleMarker([{lat}, {lon}], {{
-    radius: 14, color: '#e8e4d6', weight: 2,
-    fillColor: '#e8e4d6', fillOpacity: 0.12,
-  }}).addTo(map).bindPopup('{label_safe}');
-  L.circleMarker([{lat}, {lon}], {{
-    radius: 5, color: '#e8e4d6', weight: 2,
-    fillColor: '#e8e4d6', fillOpacity: 0.95,
-  }}).addTo(map);
+
+  const multi = {str(multi).lower()};
+  const N = {sites_count};
+  if (multi) {{
+    // Region circle (25 km radius) + scattered illustrative sub-markers
+    L.circle([{lat}, {lon}], {{
+      radius: 25000, color: '#e8e4d6', weight: 1.2, opacity: 0.55,
+      fillColor: '#e8e4d6', fillOpacity: 0.05,
+      dashArray: '6, 6',
+    }}).addTo(map).bindPopup('Region of {label_safe} — exact sub-site addresses not public');
+    // Deterministic-ish scatter (mulberry32 seeded by N + fixed key)
+    let seed = N * 9301 + 49297;
+    function rand() {{ seed = (seed * 1597 + 51749) % 244944; return seed / 244944; }}
+    for (let i = 0; i < N; i++) {{
+      const angle = rand() * 2 * Math.PI;
+      const r = (0.4 + rand() * 0.5) * 0.18;  // ~18 km spread, lat-lon degrees rough
+      const dlat = r * Math.cos(angle);
+      const dlon = r * Math.sin(angle) / Math.cos({lat} * Math.PI / 180);
+      L.circleMarker([{lat} + dlat, {lon} + dlon], {{
+        radius: 4, color: '#e8e4d6', weight: 1.5,
+        fillColor: '#e8e4d6', fillOpacity: 0.85,
+      }}).addTo(map);
+    }}
+    // Centroid pin
+    L.circleMarker([{lat}, {lon}], {{
+      radius: 6, color: '#84cc16', weight: 2,
+      fillColor: '#84cc16', fillOpacity: 0.6,
+    }}).addTo(map).bindPopup('Portfolio centroid · {sites_count} sites');
+  }} else {{
+    L.circleMarker([{lat}, {lon}], {{
+      radius: 14, color: '#e8e4d6', weight: 2,
+      fillColor: '#e8e4d6', fillOpacity: 0.12,
+    }}).addTo(map).bindPopup('{label_safe}');
+    L.circleMarker([{lat}, {lon}], {{
+      radius: 5, color: '#e8e4d6', weight: 2,
+      fillColor: '#e8e4d6', fillOpacity: 0.95,
+    }}).addTo(map);
+  }}
 </script>
 </body>
 </html>
@@ -617,13 +656,22 @@ st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 # SATELLITE VIEW — Esri imagery zoomed on the panels
 # ---------------------------------------------------------------------------
 
+import re as _re_sat
+_sites_match = _re_sat.search(r"\((\d+)\s+sites?", selected_row["name"])
+_sites_count = int(_sites_match.group(1)) if _sites_match else 1
+_sat_caption = (
+    f"Multi-site portfolio · {_sites_count} sites distributed in this region. "
+    f"Exact addresses are not public — markers are illustrative only, "
+    f"placed inside a 25-km radius around the portfolio centroid."
+    if _sites_count > 1 else
+    "Esri World Imagery (Maxar, Earthstar Geographics) at the park's GPS coordinates."
+)
+
 st.markdown(
-    """
+    f"""
     <div class="section-header">
       <span class="section-label">Satellite view</span>
-      <span class="section-caption">
-        Esri World Imagery (Maxar, Earthstar Geographics) at the park's GPS coordinates.
-      </span>
+      <span class="section-caption">{_sat_caption}</span>
     </div>
     """,
     unsafe_allow_html=True,
@@ -634,6 +682,7 @@ components.html(
         lat=float(selected_row["lat"]),
         lon=float(selected_row["lon"]),
         label=selected_row["name"],
+        sites_count=_sites_count,
     ),
     height=360,
     scrolling=False,
@@ -940,6 +989,20 @@ bt_old = _backtest_baseline_cached(
     days=bt_window,
 )
 
+# Apply fallback price to backtest results if hourly zone-prices are missing.
+# Same convention as the T12M revenue path: production_mwh × flat_price.
+def _apply_fallback_to_bt(bt: dict | None, flat_price: float) -> None:
+    if not bt or bt.get("revenue_eur") is not None:
+        return
+    bt["revenue_eur"] = bt["production_mwh"] * flat_price
+    bt["effective_price_eur_mwh"] = flat_price
+    bt["avg_dayahead_price_eur_mwh"] = flat_price
+    bt["cannibalisation_pct"] = 0.0
+
+if fallback_price is not None:
+    _apply_fallback_to_bt(bt_recent, fallback_price)
+    _apply_fallback_to_bt(bt_old, fallback_price)
+
 if bt_recent and bt_old:
     bt_start, bt_end = get_recent_window(days=bt_window, end_offset_days=5)
     bt_old_start = bt_start.replace(year=_baseline_year_for_backtest)
@@ -1026,6 +1089,17 @@ if bt_recent and bt_old:
             rev = sum((hk[i] / 1000.0) * (hp[i] if hp[i] is not None else 0.0) for i in range(i0, min(i1, len(hk))))
             daily_rev_eur.append(rev)
 
+    # When only a flat fallback price is available, the revenue line is just
+    # the production line × constant — colinear and visually misleading.
+    # Suppress it in that case and keep production-only.
+    _is_flat_fallback = bool(daily_rev_eur and (not period_prices or not period_prices.get("prices_eur_mwh")) and fallback_price is not None)
+    _show_revenue_line = bool(daily_rev_eur) and not _is_flat_fallback
+    _ts_title = (
+        f"Daily production · T12M (revenue proxy at {fallback_price:.0f} €/MWh — line omitted, redundant with production)"
+        if _is_flat_fallback else
+        f"Daily production & revenue · T12M ({T12M_START.isoformat()} → {T12M_END.isoformat()})"
+    )
+
     fig_ts = go.Figure()
     fig_ts.add_trace(go.Scatter(
         x=day_dates_t12m,
@@ -1038,7 +1112,7 @@ if bt_recent and bt_old:
         hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
         yaxis="y",
     ))
-    if daily_rev_eur:
+    if _show_revenue_line:
         fig_ts.add_trace(go.Scatter(
             x=day_dates_t12m,
             y=[r / 1000.0 for r in daily_rev_eur],
@@ -1050,7 +1124,7 @@ if bt_recent and bt_old:
         ))
     fig_ts.update_layout(
         title=dict(
-            text=f"Daily production & revenue · T12M ({T12M_START.isoformat()} → {T12M_END.isoformat()})",
+            text=_ts_title,
             font=dict(color="#f1f5f9", size=13, family="Geist", weight=500),
             x=0.0, xanchor="left", pad=dict(b=8),
         ),
