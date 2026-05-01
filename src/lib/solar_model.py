@@ -192,15 +192,22 @@ def compute_hourly_production(
     return out
 
 
-def _fetch_archive_with_components(lat: float, lon: float, year: int) -> dict | None:
-    """Fetch Open-Meteo Archive with GHI + DNI + DHI + T_air + wind (full components)."""
+def _fetch_archive_with_components(
+    lat: float, lon: float, year: int,
+    start_date: str | None = None, end_date: str | None = None,
+) -> dict | None:
+    """Fetch Open-Meteo Archive with GHI + DNI + DHI + T_air + wind (full components).
+
+    If start_date / end_date provided, fetches that range. Else full year.
+    Also returns timestamps so the caller can index by hour.
+    """
     import requests
 
     params = {
         "latitude": lat,
         "longitude": lon,
-        "start_date": f"{year}-01-01",
-        "end_date": f"{year}-12-31",
+        "start_date": start_date or f"{year}-01-01",
+        "end_date": end_date or f"{year}-12-31",
         "hourly": (
             "shortwave_radiation,direct_normal_irradiance,diffuse_radiation,"
             "temperature_2m,wind_speed_10m"
@@ -216,18 +223,98 @@ def _fetch_archive_with_components(lat: float, lon: float, year: int) -> dict | 
         return None
 
     h = payload.get("hourly") or {}
+    timestamps = h.get("time") or []
     ghi = h.get("shortwave_radiation") or []
     dni = h.get("direct_normal_irradiance") or []
     dhi = h.get("diffuse_radiation") or []
     temp = h.get("temperature_2m") or []
     wind = h.get("wind_speed_10m") or []
-    if not (ghi and dni and dhi and temp and wind):
+    if not (timestamps and ghi and dni and dhi and temp and wind):
         return None
 
     return {
+        "timestamps": timestamps,
         "ghi": [float(x) if x is not None else 0.0 for x in ghi],
         "dni": [float(x) if x is not None else 0.0 for x in dni],
         "dhi": [float(x) if x is not None else 0.0 for x in dhi],
         "temp": [float(x) if x is not None else 20.0 for x in temp],
         "wind": [float(x) if x is not None else 1.0 for x in wind],
+    }
+
+
+def compute_period_production(
+    lat: float,
+    lon: float,
+    capacity_mwp: float,
+    start_date: date,
+    end_date: date,
+    tilt: float | None = None,
+    azimuth: float = 180.0,
+    loss_pct: float = DEFAULT_LOSS_PCT,
+    dc_ac_ratio: float = DEFAULT_DC_AC_RATIO,
+) -> dict | None:
+    """Same pvlib pipeline as compute_hourly_production but for an arbitrary date range.
+
+    Used by the backtest to ensure recent-window production is computed with the
+    SAME physics as the baseline year — not the simpler live formula.
+    No caching here (period queries are typically one-shot and ad-hoc).
+    """
+    if tilt is None:
+        tilt = round(abs(lat) * 0.76, 1)
+
+    full = _fetch_archive_with_components(
+        lat, lon, year=start_date.year,
+        start_date=str(start_date), end_date=str(end_date),
+    )
+    if not full:
+        return None
+
+    times = pd.to_datetime(full["timestamps"], utc=True)
+    ghi = pd.Series(full["ghi"], index=times)
+    dni = pd.Series(full["dni"], index=times)
+    dhi = pd.Series(full["dhi"], index=times)
+    temp_air = pd.Series(full["temp"], index=times)
+    wind_speed = pd.Series(full["wind"], index=times)
+
+    solpos = pvlib.solarposition.get_solarposition(times, lat, lon)
+    dni_extra = pvlib.irradiance.get_extra_radiation(times)
+
+    poa = pvlib.irradiance.get_total_irradiance(
+        surface_tilt=tilt,
+        surface_azimuth=azimuth,
+        solar_zenith=solpos["apparent_zenith"],
+        solar_azimuth=solpos["azimuth"],
+        dni=dni, ghi=ghi, dhi=dhi,
+        dni_extra=dni_extra,
+        model="haydavies",
+    )
+    poa_global = poa["poa_global"].fillna(0).clip(lower=0)
+
+    temp_params = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][DEFAULT_TEMP_MODEL]
+    cell_temp = pvlib.temperature.sapm_cell(
+        poa_global=poa_global, temp_air=temp_air, wind_speed=wind_speed,
+        a=temp_params["a"], b=temp_params["b"], deltaT=temp_params["deltaT"],
+    )
+
+    capacity_kwp = capacity_mwp * 1000.0
+    dc_power_kw = pvlib.pvsystem.pvwatts_dc(
+        effective_irradiance=poa_global, temp_cell=cell_temp,
+        pdc0=capacity_kwp, gamma_pdc=-0.004,
+    )
+
+    ac_capacity_kw = capacity_kwp / dc_ac_ratio
+    ac_power_kw = pvlib.inverter.pvwatts(
+        pdc=dc_power_kw,
+        pdc0=ac_capacity_kw * dc_ac_ratio,
+        eta_inv_nom=0.96, eta_inv_ref=0.9637,
+    )
+    ac_power_kw = ac_power_kw.fillna(0).clip(lower=0, upper=ac_capacity_kw)
+    ac_after_losses = ac_power_kw * (1.0 - loss_pct / 100.0)
+
+    hourly_kwh = ac_after_losses.tolist()
+    return {
+        "hourly_production_kwh": hourly_kwh,
+        "timestamps": [t.isoformat() for t in times],
+        "total_kwh": float(sum(hourly_kwh)),
+        "total_mwh": float(sum(hourly_kwh)) / 1000.0,
     }

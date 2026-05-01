@@ -21,8 +21,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from src.lib.electricity_prices import fetch_period_prices
-from src.lib.historical_weather import fetch_archive_weather
-from src.lib.live_weather import estimate_current_output_mw
+from src.lib.solar_model import compute_period_production
 
 logger = logging.getLogger(__name__)
 
@@ -35,29 +34,26 @@ def backtest_recent_period(
     start: date,
     end: date,
 ) -> dict | None:
-    """Backtest a recent period using Open-Meteo Archive + hourly spot prices.
+    """Backtest a recent period — SAME pvlib pipeline as the baseline.
+
+    Cohérence with backtest_baseline_period : both use compute_period_production
+    so the only differences come from real climate + real prices, not from
+    model differences.
 
     Returns dict with :
-        production_mwh : total MWh estimated over the period
-        revenue_eur : total EUR earned (production × hourly spot)
-        effective_price_eur_mwh : revenue / production_mwh
-        avg_dayahead_price_eur_mwh : simple time-average of prices
-        cannibalisation_pct : (effective − avg) / avg × 100
-        hours_with_prices : count of hours that had a valid price
-        days : number of days in the period
-    None if the data fetches failed.
+        production_mwh, revenue_eur, effective_price_eur_mwh,
+        avg_dayahead_price_eur_mwh, cannibalisation_pct,
+        hours_with_prices, days
     """
-    weather = fetch_archive_weather(lat, lon, start, end)
-    if not weather:
+    period = compute_period_production(
+        lat=lat, lon=lon, capacity_mwp=capacity_mwp,
+        start_date=start, end_date=end,
+    )
+    if not period:
         return None
 
-    # Compute hourly production using live formula
-    hourly_prod_mwh: list[float] = []
-    for ghi, t in zip(weather["ghi_w_m2"], weather["temp_c"]):
-        mw = estimate_current_output_mw(capacity_mwp, ghi, t)
-        hourly_prod_mwh.append(mw)  # MWh per hour = MW × 1h
+    hourly_prod_mwh = [x / 1000.0 for x in period["hourly_production_kwh"]]
 
-    # Fetch matching prices
     if not zone:
         return _summary_no_prices(hourly_prod_mwh, (end - start).days + 1)
 
