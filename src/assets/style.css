@@ -271,6 +271,63 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
   margin-left: 6px;
 }
 
+/* ---- Section header — separates LIVE from HISTORICAL etc. -------- */
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin: 28px 0 14px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(232, 228, 214, 0.06);
+  flex-wrap: wrap;
+}
+
+.section-header.section-first {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 8px;
+}
+
+.section-header .section-label {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #e8e4d6;
+  font-weight: 500;
+  position: relative;
+  padding-left: 10px;
+}
+
+.section-header .section-label::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.section-header .section-caption {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 0.003em;
+  font-style: italic;
+}
+
+.section-header.section-live .section-label::before {
+  background: var(--severity-green);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
 /* ---- Empty state — terminal hint ---------------------------------- */
 .empty-hint {
   text-align: center;

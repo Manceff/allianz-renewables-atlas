@@ -318,9 +318,15 @@ st.markdown(
 # ---------------------------------------------------------------------------
 
 st.markdown(
-    '<div style="font-family: \'JetBrains Mono\', monospace; '
-    'font-size: 0.65rem; letter-spacing: 0.16em; text-transform: uppercase; '
-    'color: #7a7464; margin: 8px 0 12px;">Live · right now</div>',
+    """
+    <div class="section-header section-first section-live">
+      <span class="section-label">Live · right now</span>
+      <span class="section-caption">
+        Live snapshot · weather refreshed every 15 min (Open-Meteo) · spot price
+        from ENTSO-E day-ahead. Estimated MW = capacity × (GHI / 1000) × (1 − 14% loss) × temperature derating.
+      </span>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
@@ -336,14 +342,14 @@ if live_weather:
     cloud = live_weather["cloud_cover_pct"]
     cloud_label = "clear" if cloud < 25 else ("partly" if cloud < 75 else "overcast")
     l1.metric(
-        "Sun exposure",
+        "Sun (live)",
         f"{live_weather['ghi_w_m2']:,.0f} W/m²",
         delta=cloud_label,
         delta_color="off",
         help=f"Global Horizontal Irradiance from Open-Meteo · cloud cover {cloud:.0f}% · refreshed every 15 min",
     )
     l2.metric(
-        "Air temperature",
+        "Air temp (live)",
         f"{live_weather['temp_c']:.1f} °C",
         help=f"Sampled at the park coordinates · {live_weather['time_iso']}",
     )
@@ -355,7 +361,7 @@ if live_weather:
     )
     cf_now = (estimated_mw / float(selected_row["capacity_mwp"]) * 100.0) if selected_row["capacity_mwp"] else 0.0
     l3.metric(
-        "Estimated output",
+        "Output (live est.)",
         f"{estimated_mw:,.1f} MW",
         delta=f"{cf_now:.0f}% of capacity",
         delta_color="off",
@@ -366,14 +372,14 @@ if live_weather:
         ),
     )
 else:
-    l1.metric("Sun exposure", "—")
-    l2.metric("Air temperature", "—")
-    l3.metric("Estimated output", "—")
+    l1.metric("Sun (live)", "—")
+    l2.metric("Air temp (live)", "—")
+    l3.metric("Output (live est.)", "—")
 
 if live_spot and live_spot.get("price_eur_mwh") is not None:
     spot_price = live_spot["price_eur_mwh"]
     l4.metric(
-        "Spot price now",
+        "Spot price (live)",
         f"{spot_price:,.1f} €/MWh",
         help=f"Day-ahead zone {live_zone} · {live_spot['time_iso'][:16]} UTC · source energy-charts.info",
     )
@@ -381,21 +387,33 @@ if live_spot and live_spot.get("price_eur_mwh") is not None:
     if live_weather:
         revenue_now = estimated_mw * spot_price  # €/h (MW × €/MWh × 1h)
         l5.metric(
-            "Revenue (this hour)",
+            "Revenue/h (live est.)",
             f"€ {revenue_now:,.0f}",
-            help="Estimated output × current spot price × 1 hour. Indicative only.",
+            help="Live output estimate × current spot price × 1 hour. Indicative only.",
         )
     else:
-        l5.metric("Revenue (this hour)", "—")
+        l5.metric("Revenue/h (live est.)", "—")
 else:
-    l4.metric("Spot price now", "—", help=f"Zone {live_zone or '—'} not available right now.")
-    l5.metric("Revenue (this hour)", "—")
+    l4.metric("Spot price (live)", "—", help=f"Zone {live_zone or '—'} not available right now.")
+    l5.metric("Revenue/h (live est.)", "—")
 
 st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Satellite view (read-only)
+# SATELLITE VIEW — Esri imagery zoomed on the panels
 # ---------------------------------------------------------------------------
+
+st.markdown(
+    """
+    <div class="section-header">
+      <span class="section-label">Satellite view</span>
+      <span class="section-caption">
+        Esri World Imagery (Maxar, Earthstar Geographics) at the park's GPS coordinates.
+      </span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 components.html(
     _build_satellite_html(
@@ -449,16 +467,29 @@ if reported:
         delta_severity = "red"
 
 # ---------------------------------------------------------------------------
-# 4 KPI metrics
+# HISTORICAL · YEAR 2023 — production from PVGIS hourly data
 # ---------------------------------------------------------------------------
 
-st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <div class="section-header">
+      <span class="section-label">Historical · year {DATA_YEAR}</span>
+      <span class="section-caption">
+        Reconstruction from PVGIS SARAH-3 satellite data. {DATA_YEAR} is the
+        latest full year published by JRC. This is what the park
+        <em>actually produced</em> in {DATA_YEAR} given the real weather of that year — not a live measurement.
+      </span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 m1, m2, m3, m4 = st.columns(4)
 
 m1.metric(
-    "Today's typical output",
+    f"Output for {today_est['date'][5:]} ({DATA_YEAR})",
     f"{today_est['production_kwh'] / 1000:,.1f} MWh",
-    help=f"Climatological estimate for the calendar day {today_est['date'][5:]}, derived from PVGIS year {DATA_YEAR}.",
+    help=f"What the park produced in {DATA_YEAR} on this same calendar day. PVGIS hourly model.",
 )
 m2.metric(
     f"Annual output ({DATA_YEAR})",
@@ -466,23 +497,26 @@ m2.metric(
     help=f"PVGIS year-{DATA_YEAR} actual hourly data, 14% system losses.",
 )
 m3.metric(
-    "Capacity factor",
+    f"Capacity factor ({DATA_YEAR})",
     f"{cf_annual:.1f} %",
     help="Annual production / (peakpower × 8760 h). Industry benchmark for solar in Europe: 12-18%.",
 )
 
 if reported:
     m4.metric(
-        "Delta vs reported",
+        "Δ vs operator-reported",
         f"{delta_pct:+.1f} %",
         delta=SEVERITY_LABELS[delta_severity],
         delta_color="off",
         help=f"Reported {float(reported['annual_mwh']):,.0f} MWh ({reported['year']}) — see operator press release.",
     )
 else:
-    m4.metric("Delta vs reported", "—", help="No public production figure available for this park.")
+    m4.metric("Δ vs operator-reported", "—", help="No public production figure available for this park.")
 
-# ----- Revenue metrics (electricity day-ahead price × hourly production) -----
+# ---------------------------------------------------------------------------
+# REVENUE · YEAR 2023 — historical production × historical prices
+# ---------------------------------------------------------------------------
+
 zone = get_zone(selected_row["country"], park_id=selected_park_id)
 revenue_metrics: dict = {}
 if zone:
@@ -493,35 +527,47 @@ if zone:
             hourly_prices_eur_mwh=prices,
         )
 
-st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <div class="section-header">
+      <span class="section-label">Revenue · year {DATA_YEAR}</span>
+      <span class="section-caption">
+        What the park <em>actually earned</em> in {DATA_YEAR} : hourly production × hourly day-ahead price
+        on its bidding zone (zone {zone or '—'}). Captures the solar cannibalisation effect.
+      </span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 r1, r2, r3, r4 = st.columns(4)
 
 if revenue_metrics:
     r1.metric(
-        f"Revenue ({DATA_YEAR})",
+        f"Total revenue ({DATA_YEAR})",
         f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
         help=f"Hourly production × day-ahead price (zone {zone}). Source: energy-charts.info / ENTSO-E.",
     )
     r2.metric(
-        "Effective sale price",
+        f"Effective sale price ({DATA_YEAR})",
         f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
         help="Production-weighted average price actually realised.",
     )
     r3.metric(
-        "Day-ahead avg price",
+        f"Day-ahead avg ({DATA_YEAR})",
         f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
         help=f"Simple time-average of zone {zone} hourly prices in {DATA_YEAR}.",
     )
     r4.metric(
-        "Solar cannibalisation",
+        f"Cannibalisation ({DATA_YEAR})",
         f"{revenue_metrics['cannibalization_pct']:+.1f} %",
         help="(Effective − Day-ahead avg) / Day-ahead avg. Negative = solar produces more during low-price hours (typical).",
     )
 else:
-    r1.metric(f"Revenue ({DATA_YEAR})", "—", help=f"Zone {zone or '—'} not available on energy-charts.info.")
-    r2.metric("Effective sale price", "—")
-    r3.metric("Day-ahead avg price", "—")
-    r4.metric("Solar cannibalisation", "—")
+    r1.metric(f"Total revenue ({DATA_YEAR})", "—", help=f"Zone {zone or '—'} not available on energy-charts.info.")
+    r2.metric(f"Effective sale price ({DATA_YEAR})", "—")
+    r3.metric(f"Day-ahead avg ({DATA_YEAR})", "—")
+    r4.metric(f"Cannibalisation ({DATA_YEAR})", "—")
 
 # Source caption
 if reported:
@@ -555,6 +601,19 @@ st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # Daily output chart — single fluid line, dated year DATA_YEAR
 # ---------------------------------------------------------------------------
+
+st.markdown(
+    f"""
+    <div class="section-header">
+      <span class="section-label">Time series · year {DATA_YEAR}</span>
+      <span class="section-caption">
+        Daily and monthly breakdowns of {DATA_YEAR} production. Reveals seasonality
+        and the typical climatic shape of the site.
+      </span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 daily_kwh = hourly_to_daily(hourly_data["hourly_production_kwh"])
 daily_mwh = [v / 1000.0 for v in daily_kwh]
@@ -688,33 +747,50 @@ if st.button("← Back to globe", type="secondary"):
 # About this data
 # ---------------------------------------------------------------------------
 
-with st.expander("About the methodology", expanded=False):
+with st.expander("How to read the sections", expanded=False):
     st.markdown(
         f"""
-**Source.** PVGIS v5.2 (Joint Research Centre, European Commission) —
-the reference tool for European solar production estimates. Free, no API key.
-<https://re.jrc.ec.europa.eu/pvg_tools/en/>
+The panel mixes **two distinct horizons** that should never be confused.
+Each section header makes the source and the time horizon explicit.
 
-**Year used.** {DATA_YEAR} actual hourly data from the PVGIS SARAH-3 satellite
-radiation database (latest full year published). PVGIS reconstructs hour-by-hour
-solar production based on Meteosat satellite imagery + a panel model.
+| Section | Horizon | Sources | Why it's there |
+|---|---|---|---|
+| **Live · right now** | This hour, refreshed every 15 min | Open-Meteo (irradiance + temp) · ENTSO-E day-ahead spot | Snapshot of what the park is doing **as you read this**. Useful for "is the park performing today?" |
+| **Historical · year {DATA_YEAR}** | Full calendar year {DATA_YEAR} | PVGIS SARAH-3 satellite reconstruction | What the park **actually produced** in the latest published year. Reference for annual capacity factor + delta vs operator. |
+| **Revenue · year {DATA_YEAR}** | Full calendar year {DATA_YEAR} | PVGIS production × ENTSO-E day-ahead price (hour by hour) | What the park **actually earned**. Captures cannibalisation. |
+| **Time series · year {DATA_YEAR}** | Same year, 365 days × 24 h | Same as Historical | Visualises seasonality. |
 
-**Default assumptions.** System losses 14% (inverter, cabling, soiling
-baseline). Mounting fixed, azimuth 0° south, tilt = lat. crystSi modules.
+**Why both Live and Historical ?**
+- Live = is the park healthy today ? (compares to typical climatic conditions)
+- Historical = how did it run over a full year ? (the only horizon you can compute revenue / capacity factor on)
 
-**Reading the delta.** A delta of -8% does **not** mean the park
-underperforms. It can reflect: actual losses above 14%, marketing rounding
-in the press release, geometry differences vs our defaults, or panel
-degradation since commissioning.
+A live MW number alone is not actionable for an analyst. A 2023 capacity factor alone is missing today's market context. **Both together** = the full picture.
 
-**Severity thresholds.** Green: |Δ| < 5% (aligned). Yellow: 5-10% (within
-model uncertainty). Red: ≥ 10% (significant gap, investigate).
+---
 
-**Out of scope.** Wind production. Battery storage. Real-time / day-of measurements.
+### Sources
 
-**Data sourcing.** Park list curated from Allianz Capital Partners press
-archive, operator partner publications, and trade press, cross-checked via
-Global Energy Monitor (GEM Wiki) for exact GPS coordinates. Satellite imagery:
-Esri World Imagery (Maxar, Earthstar Geographics).
+- **PVGIS v5.3** (JRC, European Commission) — solar production reconstruction.
+  <https://re.jrc.ec.europa.eu/pvg_tools/en/>
+- **Open-Meteo** — current weather (free, no auth).
+  <https://open-meteo.com/>
+- **energy-charts.info / ENTSO-E** — day-ahead electricity prices.
+- **Global Energy Monitor (GEM Wiki)** — exact GPS coordinates of plants.
+- **Allianz Capital Partners press archive + operator press releases** — capacity, commissioning year, ownership.
+
+### Default assumptions
+
+- System losses 14% (inverter + cabling + soiling baseline).
+- Mounting fixed, azimuth 0° south, tilt = lat. crystSi modules.
+- ±15% accuracy on the live MW estimate vs the operator's metered output.
+
+### Severity thresholds (delta vs reported)
+
+Green: |Δ| < 5% (aligned). Yellow: 5-10% (within model uncertainty). Red: ≥ 10% (significant gap, investigate).
+
+### Out of scope
+
+Wind, battery storage, real-time metered output, US electricity prices (ERCOT/CAISO),
+Ireland prices (SEM not on energy-charts.info).
 """
     )
