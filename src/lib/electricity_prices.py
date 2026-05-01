@@ -27,9 +27,12 @@ COUNTRY_TO_ZONE: dict[str, str] = {
     "PT": "PT",                # Portugal
     "ES": "ES",                # Spain (MIBEL)
     "FR": "FR",                # France
-    "IT": "IT-South",          # Italie sud (zone where most ACP solar plants sit: Brindisi, SiSen, Foggia)
-    "IE": "IE-SEM",            # Ireland (single electricity market)
+    "IT": "IT-South",          # Italie sud (default — Brindisi, SiSen, Foggia)
     "DE": "DE-LU",             # Germany / Luxembourg
+    # IE (Ireland SEM) intentionally absent : energy-charts.info doesn't
+    # currently publish prices for IE-SEM. Falls back to "—" with explicit help.
+    # US (ERCOT, CAISO) absent too : energy-charts is Europe only.
+    # Future : connect ENTSO-E API direct or EIA for full coverage.
 }
 
 # Override per park_id when we know the precise zone (e.g. Manzano = North Italy)
