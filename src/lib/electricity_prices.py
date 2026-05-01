@@ -100,6 +100,74 @@ def interpret_spot_price(price_eur_mwh: float | None, zone: str) -> dict:
     return {"label": "high", "warn": False, "explain": "Significantly above normal."}
 
 
+def fetch_period_prices(zone: str, start: str, end: str) -> dict | None:
+    """Fetch hourly day-ahead prices for an arbitrary date range.
+
+    Resamples 15-min resolution to 1h average if the API returns 15-min steps
+    (energy-charts.info recently switched to 15-min for newer data).
+
+    Args :
+        zone : ENTSO-E bidding zone code (PT, ES, FR, IT-North, IT-South…).
+        start, end : 'YYYY-MM-DD' inclusive.
+
+    Returns dict with :
+        timestamps : list[int] unix seconds (hourly)
+        prices_eur_mwh : list[float | None]
+    """
+    try:
+        resp = requests.get(
+            API_URL,
+            params={"bzn": zone, "start": start, "end": end},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            logger.warning("energy-charts %s [%s..%s] HTTP %d", zone, start, end, resp.status_code)
+            return None
+        payload = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning("energy-charts fetch failed for %s : %s", zone, e)
+        return None
+
+    timestamps = payload.get("unix_seconds") or []
+    prices = payload.get("price") or []
+    if not timestamps or not prices:
+        return None
+
+    # Detect resolution from first delta. 900s = 15min, 3600s = 1h.
+    if len(timestamps) >= 2:
+        delta = timestamps[1] - timestamps[0]
+    else:
+        delta = 3600
+
+    if delta == 900:
+        # Resample 15-min → 1h by averaging 4 quarter-hours
+        hourly_ts = []
+        hourly_prices = []
+        bucket: list[float] = []
+        bucket_start_ts = None
+        for ts, p in zip(timestamps, prices):
+            ts_hour = ts - (ts % 3600)
+            if bucket_start_ts is None:
+                bucket_start_ts = ts_hour
+            if ts_hour != bucket_start_ts and bucket:
+                valid = [x for x in bucket if x is not None]
+                hourly_ts.append(bucket_start_ts)
+                hourly_prices.append(sum(valid) / len(valid) if valid else None)
+                bucket = []
+                bucket_start_ts = ts_hour
+            bucket.append(float(p) if p is not None else None)
+        if bucket and bucket_start_ts is not None:
+            valid = [x for x in bucket if x is not None]
+            hourly_ts.append(bucket_start_ts)
+            hourly_prices.append(sum(valid) / len(valid) if valid else None)
+        return {"timestamps": hourly_ts, "prices_eur_mwh": hourly_prices}
+
+    return {
+        "timestamps": list(timestamps),
+        "prices_eur_mwh": [float(p) if p is not None else None for p in prices],
+    }
+
+
 def fetch_today_curve(zone: str) -> dict | None:
     """Fetch today's hourly day-ahead curve for visualisation. Not cached.
 

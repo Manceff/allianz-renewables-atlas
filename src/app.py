@@ -25,6 +25,11 @@ import streamlit.components.v1 as components
 import yaml
 
 from src.components.globe_picker import globe_picker
+from src.lib.backtest import (
+    backtest_2023_same_period,
+    backtest_recent_period,
+    get_recent_window,
+)
 from src.lib.electricity_prices import (
     compute_revenue_metrics,
     fetch_current_spot_price,
@@ -144,6 +149,19 @@ def _fetch_live_weather_cached(lat: float, lon: float) -> dict | None:
 @st.cache_data(ttl=1800, show_spinner=False)  # 30 min refresh
 def _fetch_live_spot_cached(zone: str) -> dict | None:
     return fetch_current_spot_price(zone)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)  # daily refresh — recent window changes once per day
+def _backtest_recent_cached(park_id: str, lat: float, lon: float, capacity: float, zone: str | None, days: int) -> dict | None:
+    start, end = get_recent_window(days=days, end_offset_days=5)
+    return backtest_recent_period(lat=lat, lon=lon, capacity_mwp=capacity, zone=zone, start=start, end=end)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _backtest_2023_cached(park_id: str, hourly_kwh_tuple: tuple, zone: str | None, days: int) -> dict | None:
+    """Cache key uses tuple(hourly) hash. Convert back to list inside."""
+    start, end = get_recent_window(days=days, end_offset_days=5)
+    return backtest_2023_same_period(list(hourly_kwh_tuple), zone=zone, start=start, end=end)
 
 
 # ---------------------------------------------------------------------------
@@ -719,6 +737,122 @@ st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Daily output chart — single fluid line, dated year DATA_YEAR
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# BACKTEST · Recent N days vs 2023 same period
+# ---------------------------------------------------------------------------
+
+st.markdown(
+    """
+    <div class="section-header">
+      <span class="section-label">Backtest · recent vs 2023</span>
+      <span class="section-caption">
+        Same calendar window in two years. Recent = Open-Meteo archive (last
+        5-day-lag) + spot prices for the period. 2023 = PVGIS hourly + 2023 spot prices.
+        Reveals how the market context for this asset has evolved.
+      </span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+bt_col_toggle, _ = st.columns([1, 4])
+with bt_col_toggle:
+    bt_window = st.radio(
+        "Window",
+        options=[7, 30],
+        format_func=lambda d: f"Last {d} days",
+        horizontal=True,
+        key=f"bt-window-{selected_park_id}",
+        label_visibility="collapsed",
+    )
+
+bt_zone = get_zone(selected_row["country"], park_id=selected_park_id)
+bt_recent = _backtest_recent_cached(
+    park_id=selected_park_id,
+    lat=float(selected_row["lat"]),
+    lon=float(selected_row["lon"]),
+    capacity=float(selected_row["capacity_mwp"]),
+    zone=bt_zone,
+    days=bt_window,
+)
+bt_old = _backtest_2023_cached(
+    park_id=selected_park_id,
+    hourly_kwh_tuple=tuple(hourly_data["hourly_production_kwh"]),
+    zone=bt_zone,
+    days=bt_window,
+)
+
+if bt_recent and bt_old:
+    bt_start, bt_end = get_recent_window(days=bt_window, end_offset_days=5)
+    st.markdown(
+        f"<div style='font-family: \"JetBrains Mono\", monospace; font-size: 0.72rem; "
+        f"color: var(--text-muted); margin: 8px 0 14px; letter-spacing: 0.04em;'>"
+        f"Recent window : <b style='color:var(--text-secondary);'>{bt_start} → {bt_end}</b> · "
+        f"compared to <b style='color:var(--text-secondary);'>{bt_start.replace(year=2023)} → {bt_end.replace(year=2023)}</b>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    bt1, bt2, bt3, bt4 = st.columns(4)
+
+    # Production (climatic — same site, slightly different weather year by year)
+    delta_prod = (bt_recent["production_mwh"] - bt_old["production_mwh"]) / bt_old["production_mwh"] * 100 if bt_old["production_mwh"] else 0
+    bt1.metric(
+        f"Production ({bt_window}d)",
+        f"{bt_recent['production_mwh']:,.0f} MWh",
+        delta=f"{delta_prod:+.1f}% vs 2023",
+        delta_color="off",
+        help=f"2023 same week: {bt_old['production_mwh']:,.0f} MWh. Climatic variation between two years.",
+    )
+
+    # Revenue (the key signal)
+    if bt_recent.get("revenue_eur") is not None and bt_old.get("revenue_eur"):
+        delta_rev = (bt_recent["revenue_eur"] - bt_old["revenue_eur"]) / bt_old["revenue_eur"] * 100
+        rev_recent_k = bt_recent["revenue_eur"] / 1000.0
+        bt2.metric(
+            f"Revenue ({bt_window}d)",
+            f"€ {rev_recent_k:,.0f} k",
+            delta=f"{delta_rev:+.1f}% vs 2023",
+            delta_color="off",
+            help=f"2023 same week: € {bt_old['revenue_eur']/1000:,.0f}k. Captures market evolution.",
+        )
+    else:
+        bt2.metric(f"Revenue ({bt_window}d)", "—", help=f"Zone {bt_zone or '—'} not available.")
+
+    # Effective price
+    if bt_recent.get("effective_price_eur_mwh") is not None and bt_old.get("effective_price_eur_mwh"):
+        delta_eff = bt_recent["effective_price_eur_mwh"] - bt_old["effective_price_eur_mwh"]
+        bt3.metric(
+            f"Effective price ({bt_window}d)",
+            f"{bt_recent['effective_price_eur_mwh']:,.1f} €/MWh",
+            delta=f"{delta_eff:+.1f} vs 2023",
+            delta_color="off",
+            help=f"2023 same week: {bt_old['effective_price_eur_mwh']:.1f} €/MWh.",
+        )
+    else:
+        bt3.metric(f"Effective price ({bt_window}d)", "—")
+
+    # Cannibalisation
+    if bt_recent.get("cannibalisation_pct") is not None and bt_old.get("cannibalisation_pct") is not None:
+        delta_cann = bt_recent["cannibalisation_pct"] - bt_old["cannibalisation_pct"]
+        bt4.metric(
+            f"Cannibalisation ({bt_window}d)",
+            f"{bt_recent['cannibalisation_pct']:+.1f} %",
+            delta=f"{delta_cann:+.1f} pts vs 2023",
+            delta_color="off",
+            help=f"2023 same week: {bt_old['cannibalisation_pct']:+.1f}%. Negative delta = cannibalisation worsened.",
+        )
+    else:
+        bt4.metric(f"Cannibalisation ({bt_window}d)", "—")
+elif bt_recent and not bt_old:
+    st.info("2023 backtest unavailable for this zone.")
+elif not bt_recent:
+    st.info("Recent backtest unavailable — Open-Meteo archive or spot prices fetch failed.")
+
+# ---------------------------------------------------------------------------
+# TIME SERIES · year 2023
 # ---------------------------------------------------------------------------
 
 st.markdown(
