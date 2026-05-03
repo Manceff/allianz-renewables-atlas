@@ -812,22 +812,33 @@ if _sub_sites_payload:
                 st.session_state[_focus_key] = _idx_val
                 st.rerun()
 
-components.html(
-    _build_satellite_html(
-        lat=float(selected_row["lat"]),
-        lon=float(selected_row["lon"]),
-        label=selected_row["name"],
-        sites_count=_sites_count,
-        sub_sites=_sub_sites_payload,
-        focused_sub_idx=_focused_idx,
-    ),
-    height=360,
-    scrolling=False,
-)
-
-# Show coords + quick links + coord editor if focused on a specific site
+# When a sub-site is focused, switch to the coord_picker component (dblclick → save).
+# Otherwise render the full overview map with all 17 markers.
 if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_sub_sites_payload):
     _fs = _sub_sites_payload[_focused_idx]
+    from src.components.coord_picker import coord_picker as _coord_picker
+
+    _picker_label = f"{_fs['name']} · Co. {_fs['county']} · {_fs['capacity_mw']:.1f} MW"
+    _new_coords = _coord_picker(
+        lat=float(_fs["lat"]),
+        lon=float(_fs["lon"]),
+        label=_picker_label,
+        height=420,
+        key=f"sub-coord-picker-{selected_park_id}-{_focused_idx}",
+    )
+    if _new_coords:
+        _new_lat, _new_lon = float(_new_coords[0]), float(_new_coords[1])
+        _existing = _sub_site_overrides_for_park.get(_fs["name"])
+        _is_new_save = (not _existing) or (
+            abs(_existing[0] - _new_lat) > 1e-5 or abs(_existing[1] - _new_lon) > 1e-5
+        )
+        if _is_new_save:
+            _save_sub_site_override(selected_park_id, _fs["name"], _new_lat, _new_lon)
+            st.cache_data.clear()
+            st.success(f"Position saved for {_fs['name']} → {_new_lat:.5f}, {_new_lon:.5f}")
+            st.rerun()
+
+    # Focus banner with site context + quick links + reset action
     _gmaps = f"https://www.google.com/maps/@{_fs['lat']},{_fs['lon']},17z/data=!3m1!1e3"
     _osm = f"https://www.openstreetmap.org/?mlat={_fs['lat']}&mlon={_fs['lon']}#map=16/{_fs['lat']}/{_fs['lon']}"
     _overpass = (
@@ -852,53 +863,45 @@ if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_
           &nbsp;·&nbsp; Co. {_fs['county']} &nbsp;·&nbsp; {_fs['capacity_mw']:.1f} MW &nbsp;·&nbsp;
           <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs['lat']}, {_fs['lon']}</code>
           <div style="margin-top: 6px; font-size: 0.72rem;">
-            <a href="{_gmaps}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">Open in Google Maps satellite ↗</a>
-            <a href="{_osm}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">OpenStreetMap ↗</a>
-            <a href="{_overpass}" target="_blank" style="color: #7dd3fc;">Overpass query (find OSM solar plants nearby) ↗</a>
+            <span style="color: #84cc16;">▸ Double-click on the panels to save new coords.</span>
+            <a href="{_gmaps}" target="_blank" style="color: #7dd3fc; margin-left: 14px; margin-right: 14px;">Open in Google Maps ↗</a>
+            <a href="{_osm}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">OSM ↗</a>
+            <a href="{_overpass}" target="_blank" style="color: #7dd3fc;">Overpass query ↗</a>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # ----- Coord correction editor -----
-    with st.expander("✎ Correct this site's position", expanded=False):
-        st.caption(
-            "Once you've located the actual solar farm on Google Maps or OSM, paste the precise "
-            "lat/lon below. The correction is saved to `data/sub_site_overrides.yaml` and the marker "
-            "turns blue (corrected). Original commune-level coords are preserved for rollback."
+    if _fs["is_overridden"]:
+        _r_cols = st.columns([5, 1])
+        _r_cols[0].caption(
+            f"Original commune coords: {_fs['original_lat']:.6f}, {_fs['original_lon']:.6f} — current is corrected."
         )
-        _ed_cols = st.columns([2, 2, 1, 1])
-        _new_lat = _ed_cols[0].number_input(
-            "Latitude",
-            value=float(_fs["lat"]),
-            min_value=-90.0, max_value=90.0,
-            step=0.0001, format="%.6f",
-            key=f"edit-lat-{selected_park_id}-{_focused_idx}",
-        )
-        _new_lon = _ed_cols[1].number_input(
-            "Longitude",
-            value=float(_fs["lon"]),
-            min_value=-180.0, max_value=180.0,
-            step=0.0001, format="%.6f",
-            key=f"edit-lon-{selected_park_id}-{_focused_idx}",
-        )
-        _ed_cols[2].markdown("<br>", unsafe_allow_html=True)
-        _ed_cols[3].markdown("<br>", unsafe_allow_html=True)
-        if _ed_cols[2].button("Save", key=f"save-coord-{selected_park_id}-{_focused_idx}", use_container_width=True, type="primary"):
-            _save_sub_site_override(selected_park_id, _fs["name"], _new_lat, _new_lon)
+        if _r_cols[1].button(
+            "Reset to original",
+            key=f"reset-coord-{selected_park_id}-{_focused_idx}",
+            use_container_width=True,
+        ):
+            _delete_sub_site_override(selected_park_id, _fs["name"])
             st.cache_data.clear()
-            st.success(f"Position saved for {_fs['name']}")
+            st.info(f"Position reset to original for {_fs['name']}")
             st.rerun()
-        if _fs["is_overridden"]:
-            if _ed_cols[3].button("Reset", key=f"reset-coord-{selected_park_id}-{_focused_idx}", use_container_width=True):
-                _delete_sub_site_override(selected_park_id, _fs["name"])
-                st.cache_data.clear()
-                st.info(f"Position reset to original for {_fs['name']}")
-                st.rerun()
-            st.caption(
-                f"Original commune coords: {_fs['original_lat']:.6f}, {_fs['original_lon']:.6f}"
-            )
+
+else:
+    # Overview mode — render all sub-sites at once
+    components.html(
+        _build_satellite_html(
+            lat=float(selected_row["lat"]),
+            lon=float(selected_row["lon"]),
+            label=selected_row["name"],
+            sites_count=_sites_count,
+            sub_sites=_sub_sites_payload,
+            focused_sub_idx=None,
+        ),
+        height=360,
+        scrolling=False,
+    )
 
 # ---------------------------------------------------------------------------
 # Detail panel — fetch PVGIS and render
