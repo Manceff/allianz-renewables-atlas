@@ -35,6 +35,18 @@ class Technology(str, Enum):
     BATTERY_STORAGE = "battery_storage"
 
 
+class SubSite(BaseModel):
+    """Sous-site d'un portfolio multi-sites (ex. Elgin Ireland 16 sites)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=1)
+    county: str = Field(min_length=1)
+    capacity_mw: float = Field(ge=0)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
 class ParkModel(BaseModel):
     """Schéma validé d'un parc Renewables Allianz."""
 
@@ -55,6 +67,8 @@ class ParkModel(BaseModel):
     has_pvgis_estimate: bool = False
     has_reported_production: bool = False
     excluded_from_sweep: bool = False
+    sub_sites: tuple[SubSite, ...] | None = None
+    sub_sites_caption: str | None = None
 
     @field_validator("coordinates", mode="before")
     @classmethod

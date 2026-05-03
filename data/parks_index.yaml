@@ -196,6 +196,29 @@ parks:
     acquisition_year: 2023
     press_release_url: "https://www.elgin.com/news/elgin-energy-celebrates-milestone-portfolio-sale"
     notes: "Une des plus grosses transactions solaires irlandaises en capacité. 16 projets distribués (14 RESS-2, 2 RESS-3 — revenus sécurisés par contrats d'État). Forward sale signée déc 2023, energisation échelonnée 2024-2025. Elgin reste asset manager + EPC."
+    # Sub-sites identifiés depuis elgin.com/projects (RESS-2 + RESS-3 candidats).
+    # 17 candidats pour 16 places dans le portfolio Allianz — Elgin ne disambigue pas
+    # publiquement. Coordonnées = centroïdes des communes (±5 km, pas adresses parcelles).
+    # Total déclaré 191 MWp DC ≈ 137 MWac × 1.39 (DC/AC over-build, standard utility-scale).
+    sub_sites:
+      - { name: "Pickering Forest",  county: "Kildare",   capacity_mw: 25.0, lat: 53.3389, lon: -6.5460 }
+      - { name: "Marlinstown",       county: "Westmeath", capacity_mw: 4.0,  lat: 53.5258, lon: -7.3200 }
+      - { name: "Monread",           county: "Kildare",   capacity_mw: 4.0,  lat: 53.2168, lon: -6.6649 }
+      - { name: "Glenamaddy",        county: "Galway",    capacity_mw: 4.0,  lat: 53.6133, lon: -8.5600 }  # RESS-3 winner "Galway"
+      - { name: "Talbots Inch",      county: "Kilkenny",  capacity_mw: 6.0,  lat: 52.6650, lon: -7.2500 }
+      - { name: "Ballynilard",       county: "Tipperary", capacity_mw: 4.0,  lat: 52.5100, lon: -7.9200 }
+      - { name: "Ballyragget",       county: "Kilkenny",  capacity_mw: 35.0, lat: 52.7884, lon: -7.3360 }
+      - { name: "Athboy",            county: "Meath",     capacity_mw: 5.35, lat: 53.6233, lon: -6.9128 }
+      - { name: "Tullynally",        county: "Westmeath", capacity_mw: 4.0,  lat: 53.6810, lon: -7.3000 }
+      - { name: "Finnea",            county: "Cavan",     capacity_mw: 4.0,  lat: 53.7800, lon: -7.3900 }
+      - { name: "Edgeworthstown",    county: "Longford",  capacity_mw: 4.0,  lat: 53.6970, lon: -7.6100 }
+      - { name: "Kilmacthomas",      county: "Waterford", capacity_mw: 4.0,  lat: 52.2050, lon: -7.4000 }
+      - { name: "Castlerea",         county: "Roscommon", capacity_mw: 4.0,  lat: 53.7585, lon: -8.4910 }
+      - { name: "Tullamore",         county: "Offaly",    capacity_mw: 5.8,  lat: 53.2734, lon: -7.4894 }
+      - { name: "Portarlington",     county: "Offaly",    capacity_mw: 4.0,  lat: 53.1635, lon: -7.1854 }
+      - { name: "Bagenalstown",      county: "Carlow",    capacity_mw: 4.0,  lat: 52.6953, lon: -6.9619 }  # RESS-3 winner "Carlow"
+      - { name: "Liss",              county: "Meath",     capacity_mw: 4.0,  lat: 53.6650, lon: -6.7800 }  # approx
+    sub_sites_caption: "17 candidate sites identified from elgin.com/projects (RESS-2 + RESS-3). The Allianz portfolio is 16 of these — exact list not publicly disambiguated by Elgin Energy. Commune-level coords ±5 km."
     has_pvgis_estimate: true
     has_reported_production: false
 

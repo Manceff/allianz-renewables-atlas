@@ -176,16 +176,26 @@ def _backtest_baseline_cached(
 # ---------------------------------------------------------------------------
 
 
-def _build_satellite_html(lat: float, lon: float, label: str, sites_count: int = 1) -> str:
+def _build_satellite_html(
+    lat: float,
+    lon: float,
+    label: str,
+    sites_count: int = 1,
+    sub_sites: list[dict] | None = None,
+) -> str:
     """Render a satellite map.
 
     For single-site parks : zoom 14, single marker on the panels.
-    For multi-site portfolios (sites_count > 1) : zoom 8, draw a 25-km radius circle around the
-    centroid + scatter `sites_count` random sub-markers inside it as a visual proxy. Honest
-    disclaimer: the exact sub-site addresses are not public.
+    For multi-site portfolios with `sub_sites` provided (ex. Elgin Ireland) : zoom auto-fit on
+    bounding box, real markers at commune-level coordinates with name/county/capacity tooltips.
+    For multi-site portfolios without `sub_sites` (ex. Brindisi) : zoom 8, scatter `sites_count`
+    deterministic random sub-markers as a visual proxy.
     """
+    import json as _json
     label_safe = label.replace("'", "&#39;").replace('"', "&quot;")
     multi = sites_count > 1
+    has_real_subs = bool(sub_sites)
+    sub_sites_json = _json.dumps(sub_sites or [])
     initial_zoom = 8 if multi else 14
     return f"""
 <!DOCTYPE html>
@@ -224,19 +234,47 @@ def _build_satellite_html(lat: float, lon: float, label: str, sites_count: int =
 
   const multi = {str(multi).lower()};
   const N = {sites_count};
-  if (multi) {{
-    // Region circle (25 km radius) + scattered illustrative sub-markers
+  const subSites = {sub_sites_json};
+  const hasRealSubs = {str(has_real_subs).lower()};
+  if (multi && hasRealSubs) {{
+    // Real sub-sites — render markers at commune-level coords with rich popups
+    const points = subSites.map(s => [s.lat, s.lon]);
+    subSites.forEach(s => {{
+      const marker = L.circleMarker([s.lat, s.lon], {{
+        radius: 5, color: '#e8e4d6', weight: 1.5,
+        fillColor: '#e8e4d6', fillOpacity: 0.9,
+      }}).addTo(map);
+      marker.bindPopup(
+        '<div style="font-family: Geist, sans-serif; font-size: 12px; min-width: 180px;">' +
+        '<div style="font-weight: 600; color: #f1f5f9; margin-bottom: 3px;">' + s.name + '</div>' +
+        '<div style="color: #94a3b8; font-size: 11px;">Co. ' + s.county + ' · ' + s.capacity_mw.toFixed(1) + ' MW</div>' +
+        '</div>'
+      );
+      marker.bindTooltip(s.name + ' · ' + s.capacity_mw.toFixed(1) + ' MW', {{
+        permanent: false, direction: 'top', offset: [0, -8],
+      }});
+    }});
+    // Centroid pin (subtle)
+    L.circleMarker([{lat}, {lon}], {{
+      radius: 4, color: '#84cc16', weight: 1.5,
+      fillColor: '#84cc16', fillOpacity: 0.5,
+    }}).addTo(map).bindPopup('Portfolio centroid · {sites_count} known candidate sites');
+    // Auto-fit to bounding box of all sub-sites
+    if (points.length > 0) {{
+      map.fitBounds(L.latLngBounds(points), {{ padding: [40, 40] }});
+    }}
+  }} else if (multi) {{
+    // Fallback : portfolio without sub-site coords — illustrative random scatter
     L.circle([{lat}, {lon}], {{
       radius: 25000, color: '#e8e4d6', weight: 1.2, opacity: 0.55,
       fillColor: '#e8e4d6', fillOpacity: 0.05,
       dashArray: '6, 6',
     }}).addTo(map).bindPopup('Region of {label_safe} — exact sub-site addresses not public');
-    // Deterministic-ish scatter (mulberry32 seeded by N + fixed key)
     let seed = N * 9301 + 49297;
     function rand() {{ seed = (seed * 1597 + 51749) % 244944; return seed / 244944; }}
     for (let i = 0; i < N; i++) {{
       const angle = rand() * 2 * Math.PI;
-      const r = (0.4 + rand() * 0.5) * 0.18;  // ~18 km spread, lat-lon degrees rough
+      const r = (0.4 + rand() * 0.5) * 0.18;
       const dlat = r * Math.cos(angle);
       const dlon = r * Math.sin(angle) / Math.cos({lat} * Math.PI / 180);
       L.circleMarker([{lat} + dlat, {lon} + dlon], {{
@@ -244,7 +282,6 @@ def _build_satellite_html(lat: float, lon: float, label: str, sites_count: int =
         fillColor: '#e8e4d6', fillOpacity: 0.85,
       }}).addTo(map);
     }}
-    // Centroid pin
     L.circleMarker([{lat}, {lon}], {{
       radius: 6, color: '#84cc16', weight: 2,
       fillColor: '#84cc16', fillOpacity: 0.6,
@@ -657,15 +694,32 @@ st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 
 import re as _re_sat
+from src.lib.parks_loader import get_park_by_id as _get_park_by_id
 _sites_match = _re_sat.search(r"\((\d+)\s+sites?", selected_row["name"])
 _sites_count = int(_sites_match.group(1)) if _sites_match else 1
-_sat_caption = (
-    f"Multi-site portfolio · {_sites_count} sites distributed in this region. "
-    f"Exact addresses are not public — markers are illustrative only, "
-    f"placed inside a 25-km radius around the portfolio centroid."
-    if _sites_count > 1 else
-    "Esri World Imagery (Maxar, Earthstar Geographics) at the park's GPS coordinates."
-)
+
+# Look up the raw park model to access sub_sites if present
+_park_model = _get_park_by_id(selected_park_id)
+_sub_sites_payload = None
+if _park_model and _park_model.sub_sites:
+    _sub_sites_payload = [
+        {"name": s.name, "county": s.county, "capacity_mw": s.capacity_mw, "lat": s.lat, "lon": s.lon}
+        for s in _park_model.sub_sites
+    ]
+
+if _sub_sites_payload:
+    _sat_caption = (
+        _park_model.sub_sites_caption
+        or f"Multi-site portfolio · {len(_sub_sites_payload)} known sub-sites — markers at commune-level GPS."
+    )
+elif _sites_count > 1:
+    _sat_caption = (
+        f"Multi-site portfolio · {_sites_count} sites distributed in this region. "
+        f"Exact addresses are not public — markers are illustrative only, "
+        f"placed inside a 25-km radius around the portfolio centroid."
+    )
+else:
+    _sat_caption = "Esri World Imagery (Maxar, Earthstar Geographics) at the park's GPS coordinates."
 
 st.markdown(
     f"""
@@ -683,6 +737,7 @@ components.html(
         lon=float(selected_row["lon"]),
         label=selected_row["name"],
         sites_count=_sites_count,
+        sub_sites=_sub_sites_payload,
     ),
     height=360,
     scrolling=False,
