@@ -120,6 +120,38 @@ def _delete_sub_site_override(park_id: str, site_name: str) -> None:
             yaml.safe_dump(overrides, f, default_flow_style=False, sort_keys=True, allow_unicode=True)
 
 
+SUB_SITE_VERIFIED_PATH = _ROOT / "data" / "sub_site_verified_built.yaml"
+
+
+def _load_sub_site_verified() -> dict[str, dict[str, bool]]:
+    """User-curated 'visually confirmed built' flag per sub-site, set via the focus button.
+
+    Bypasses the SEAI lag: SEAI flips Contracted→Connected only after final commissioning,
+    which can be 3-12 months after panels are physically posed. This file holds the user's
+    visual verifications from satellite imagery.
+    """
+    if not SUB_SITE_VERIFIED_PATH.exists():
+        return {}
+    with open(SUB_SITE_VERIFIED_PATH) as f:
+        return yaml.safe_load(f) or {}
+
+
+def _toggle_sub_site_verified(park_id: str, site_name: str) -> bool:
+    data = _load_sub_site_verified()
+    park_data = data.setdefault(park_id, {})
+    if park_data.get(site_name):
+        del park_data[site_name]
+        if not park_data:
+            del data[park_id]
+        new_state = False
+    else:
+        park_data[site_name] = True
+        new_state = True
+    with open(SUB_SITE_VERIFIED_PATH, "w") as f:
+        yaml.safe_dump(data, f, default_flow_style=False, sort_keys=True, allow_unicode=True)
+    return new_state
+
+
 # ---------------------------------------------------------------------------
 # Data loaders (cached)
 # ---------------------------------------------------------------------------
@@ -272,18 +304,25 @@ def _build_satellite_html(
     subSites.forEach((s, i) => {{
       const isFocused = (i === focusedIdx);
       const isOverridden = !!s.is_overridden;
-      const baseColor = isFocused ? '#84cc16' : (isOverridden ? '#7dd3fc' : '#e8e4d6');
+      const isVerified = !!s.is_verified_built;
+      // Priority: focused (lime) > verified built (lime green outline) > overridden (blue) > default (cream)
+      let baseColor = '#e8e4d6';
+      if (isVerified) baseColor = '#84cc16';
+      if (isOverridden) baseColor = '#7dd3fc';
+      if (isFocused) baseColor = '#84cc16';
       const marker = L.circleMarker([s.lat, s.lon], {{
-        radius: isFocused ? 9 : 5,
+        radius: isFocused ? 9 : (isVerified ? 7 : 5),
         color: baseColor,
-        weight: isFocused ? 2.5 : 1.5,
+        weight: isFocused ? 2.5 : (isVerified ? 2 : 1.5),
         fillColor: baseColor,
-        fillOpacity: isFocused ? 0.95 : 0.9,
+        fillOpacity: isFocused ? 0.95 : (isVerified ? 0.95 : 0.9),
       }}).addTo(map);
-      const overrideTag = isOverridden ? '<span style="color:#7dd3fc; font-size:10px; margin-left:6px;">[corrected]</span>' : '';
+      let tags = '';
+      if (isOverridden) tags += '<span style="color:#7dd3fc; font-size:10px; margin-left:6px;">[corrected]</span>';
+      if (isVerified) tags += '<span style="color:#84cc16; font-size:10px; margin-left:6px; font-weight:600;">✅ BUILT</span>';
       marker.bindPopup(
         '<div style="font-family: Geist, sans-serif; font-size: 12px; min-width: 180px;">' +
-        '<div style="font-weight: 600; color: #f1f5f9; margin-bottom: 3px;">' + s.name + overrideTag + '</div>' +
+        '<div style="font-weight: 600; color: #f1f5f9; margin-bottom: 3px;">' + s.name + tags + '</div>' +
         '<div style="color: #94a3b8; font-size: 11px;">Co. ' + s.county + ' · ' + s.capacity_mw.toFixed(1) + ' MW</div>' +
         '<div style="color: #7a7464; font-size: 10px; margin-top: 4px;">' + s.lat.toFixed(4) + ', ' + s.lon.toFixed(4) + '</div>' +
         '</div>'
@@ -560,6 +599,19 @@ if _is_forward_sale:
         unsafe_allow_html=True,
     )
 
+    # Load verified-built flags
+    _verified_for_park = _load_sub_site_verified().get(selected_park_id, {})
+
+    # Compute currently-confirmed subset
+    verified_count = 0
+    verified_mw_ac = 0.0
+    verified_mwh = 0.0
+    for s, calc in zip(_park_model_for_status.sub_sites or [], portfolio["per_site"]):
+        if _verified_for_park.get(s.name):
+            verified_count += 1
+            verified_mw_ac += s.capacity_mw
+            verified_mwh += calc["annual_mwh"]
+
     pm1, pm2, pm3, pm4 = st.columns(4)
     pm1.metric(
         "Projected annual output",
@@ -605,6 +657,48 @@ if _is_forward_sale:
     else:
         pm4.metric("Projected annual revenue", "—", help="No RESS strike price configured.")
 
+    # Currently-confirmed-built subset (visually verified by user via satellite)
+    if verified_count > 0:
+        verified_revenue_meur = (
+            verified_mwh * (_park_model_for_status.ress_strike_price_eur_mwh or 0) / 1_000_000.0
+        )
+        st.markdown(
+            f"""
+            <div style="margin: 10px 0 14px; padding: 10px 14px;
+              background: rgba(132, 204, 22, 0.07);
+              border-left: 3px solid #84cc16;
+              border-radius: 4px;
+              font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+              color: #cbd5e1; letter-spacing: 0.02em;">
+              <span style="color: #84cc16; font-weight: 600;">▸ CURRENTLY CONFIRMED BUILT (visual verification)</span>
+              &nbsp;&nbsp;
+              <b style="color:#f1f5f9;">{verified_count}/{len(_park_model_for_status.sub_sites or [])} sites</b>
+              &nbsp;·&nbsp; {verified_mw_ac:.1f} MW (AC)
+              &nbsp;·&nbsp; <b style="color:#f1f5f9;">{verified_mwh:,.0f} MWh/yr</b>
+              &nbsp;·&nbsp; € {verified_revenue_meur:.2f} M revenue/yr
+              &nbsp;&nbsp;<span style="color:#7a7464;">— remaining {annual_mwh - verified_mwh:,.0f} MWh from {len(_park_model_for_status.sub_sites or [])-verified_count} contracted sites pending energization.</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"""
+            <div style="margin: 10px 0 14px; padding: 10px 14px;
+              background: rgba(100, 116, 139, 0.06);
+              border-left: 3px solid rgba(100, 116, 139, 0.5);
+              border-radius: 4px;
+              font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+              color: #94a3b8; letter-spacing: 0.02em;">
+              ▸ <span style="color: #cbd5e1;">No site visually confirmed built yet.</span>
+              Click a site button below, open in Google Maps satellite,
+              and toggle "✅ I see panels here" if you spot the panel array.
+              Currently confirmed sites will accrue MWh / revenue here.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     # ----- Per-site breakdown -----
     st.markdown(
         """
@@ -622,7 +716,9 @@ if _is_forward_sale:
     import pandas as pd_ps
     rows = []
     for s, calc in zip(_park_model_for_status.sub_sites or [], portfolio["per_site"]):
+        is_verified = bool(_verified_for_park.get(s.name))
         rows.append({
+            "Built?": "✅" if is_verified else "—",
             "Site (commune)": s.name,
             "EirGrid name": s.eirgrid_name or "—",
             "EirGrid code": s.eirgrid_code or "—",
@@ -680,6 +776,7 @@ if _is_forward_sale:
             "is_overridden": ov is not None,
             "original_lat": s.lat,
             "original_lon": s.lon,
+            "is_verified_built": bool(_verified_for_park.get(s.name)),
         })
 
     _focus_key_fs = f"sat-focus-{selected_park_id}"
@@ -722,6 +819,12 @@ if _is_forward_sale:
                 st.rerun()
         _gmaps = f"https://www.google.com/maps/@{_fs_pt['lat']},{_fs_pt['lon']},17z/data=!3m1!1e3"
         _osm = f"https://www.openstreetmap.org/?mlat={_fs_pt['lat']}&mlon={_fs_pt['lon']}#map=16/{_fs_pt['lat']}/{_fs_pt['lon']}"
+        _verified_tag = (
+            '<span style="color:#84cc16; font-weight:600; margin-left:10px; '
+            'background:rgba(132,204,22,0.15); padding:2px 8px; border-radius:4px; font-size:0.72rem;">'
+            '✅ VERIFIED BUILT</span>'
+            if _fs_pt["is_verified_built"] else ""
+        )
         st.markdown(
             f"""<div style="margin: 8px 0 4px; padding: 10px 14px;
               background: rgba(132, 204, 22, 0.05);
@@ -729,7 +832,7 @@ if _is_forward_sale:
               border-radius: 8px;
               font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
               color: #cbd5e1; letter-spacing: 0.02em;">
-              <span style="color: #84cc16; font-weight: 600;">▸ {_fs_pt['name']}</span>
+              <span style="color: #84cc16; font-weight: 600;">▸ {_fs_pt['name']}</span>{_verified_tag}
               &nbsp;·&nbsp; Co. {_fs_pt['county']} &nbsp;·&nbsp; {_fs_pt['capacity_mw']:.1f} MW &nbsp;·&nbsp;
               <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs_pt['lat']}, {_fs_pt['lon']}</code>
               <div style="margin-top: 6px; font-size: 0.72rem;">
@@ -739,6 +842,29 @@ if _is_forward_sale:
             </div>""",
             unsafe_allow_html=True,
         )
+
+        # Toggle "✅ I see panels here" / "❌ Not built yet"
+        _vbtn_cols = st.columns([3, 1])
+        _verified_now = _fs_pt["is_verified_built"]
+        _btn_label = "❌ Mark as not built" if _verified_now else "✅ I see panels here — mark as built"
+        _btn_help = (
+            "This site is currently flagged as visually confirmed built. "
+            "Click to remove the flag if it was a mistake."
+            if _verified_now else
+            "After checking Google Maps satellite at the coords above and confirming you see the panel array, "
+            "click this button. The site contributes to the 'Currently confirmed built' subset metrics, "
+            "the marker turns green on the map, and the per-site table shows ✅."
+        )
+        _vbtn_cols[0].caption(_btn_help)
+        if _vbtn_cols[1].button(
+            _btn_label,
+            key=f"verify-built-{selected_park_id}-{_focused_idx_fs}",
+            use_container_width=True,
+            type=("primary" if not _verified_now else "secondary"),
+        ):
+            _toggle_sub_site_verified(selected_park_id, _fs_pt["name"])
+            st.cache_data.clear()
+            st.rerun()
     else:
         components.html(
             _build_satellite_html(
