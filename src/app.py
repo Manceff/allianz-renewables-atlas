@@ -77,6 +77,7 @@ ARCHIVE_LAG_DAYS = 6           # Open-Meteo Archive publishes with ~5-day lag, +
 T12M_DAYS = 365
 
 COORD_OVERRIDES_PATH = _ROOT / "data" / "coord_overrides.yaml"
+SUB_SITE_OVERRIDES_PATH = _ROOT / "data" / "sub_site_overrides.yaml"
 
 
 def _load_coord_overrides() -> dict[str, list[float]]:
@@ -92,6 +93,31 @@ def _save_coord_override(park_id: str, lat: float, lon: float) -> None:
     overrides[park_id] = [round(float(lat), 6), round(float(lon), 6)]
     with open(COORD_OVERRIDES_PATH, "w") as f:
         yaml.safe_dump(overrides, f, default_flow_style=False, sort_keys=True)
+
+
+def _load_sub_site_overrides() -> dict[str, dict[str, list[float]]]:
+    """Per-portfolio overrides : {park_id: {site_name: [lat, lon]}}."""
+    if not SUB_SITE_OVERRIDES_PATH.exists():
+        return {}
+    with open(SUB_SITE_OVERRIDES_PATH) as f:
+        return yaml.safe_load(f) or {}
+
+
+def _save_sub_site_override(park_id: str, site_name: str, lat: float, lon: float) -> None:
+    overrides = _load_sub_site_overrides()
+    overrides.setdefault(park_id, {})[site_name] = [round(float(lat), 6), round(float(lon), 6)]
+    with open(SUB_SITE_OVERRIDES_PATH, "w") as f:
+        yaml.safe_dump(overrides, f, default_flow_style=False, sort_keys=True, allow_unicode=True)
+
+
+def _delete_sub_site_override(park_id: str, site_name: str) -> None:
+    overrides = _load_sub_site_overrides()
+    if park_id in overrides and site_name in overrides[park_id]:
+        del overrides[park_id][site_name]
+        if not overrides[park_id]:
+            del overrides[park_id]
+        with open(SUB_SITE_OVERRIDES_PATH, "w") as f:
+            yaml.safe_dump(overrides, f, default_flow_style=False, sort_keys=True, allow_unicode=True)
 
 
 # ---------------------------------------------------------------------------
@@ -245,16 +271,19 @@ def _build_satellite_html(
     const points = subSites.map(s => [s.lat, s.lon]);
     subSites.forEach((s, i) => {{
       const isFocused = (i === focusedIdx);
+      const isOverridden = !!s.is_overridden;
+      const baseColor = isFocused ? '#84cc16' : (isOverridden ? '#7dd3fc' : '#e8e4d6');
       const marker = L.circleMarker([s.lat, s.lon], {{
         radius: isFocused ? 9 : 5,
-        color: isFocused ? '#84cc16' : '#e8e4d6',
+        color: baseColor,
         weight: isFocused ? 2.5 : 1.5,
-        fillColor: isFocused ? '#84cc16' : '#e8e4d6',
+        fillColor: baseColor,
         fillOpacity: isFocused ? 0.95 : 0.9,
       }}).addTo(map);
+      const overrideTag = isOverridden ? '<span style="color:#7dd3fc; font-size:10px; margin-left:6px;">[corrected]</span>' : '';
       marker.bindPopup(
         '<div style="font-family: Geist, sans-serif; font-size: 12px; min-width: 180px;">' +
-        '<div style="font-weight: 600; color: #f1f5f9; margin-bottom: 3px;">' + s.name + '</div>' +
+        '<div style="font-weight: 600; color: #f1f5f9; margin-bottom: 3px;">' + s.name + overrideTag + '</div>' +
         '<div style="color: #94a3b8; font-size: 11px;">Co. ' + s.county + ' · ' + s.capacity_mw.toFixed(1) + ' MW</div>' +
         '<div style="color: #7a7464; font-size: 10px; margin-top: 4px;">' + s.lat.toFixed(4) + ', ' + s.lon.toFixed(4) + '</div>' +
         '</div>'
@@ -716,11 +745,25 @@ _sites_count = int(_sites_match.group(1)) if _sites_match else 1
 # Look up the raw park model to access sub_sites if present
 _park_model = _get_park_by_id(selected_park_id)
 _sub_sites_payload = None
+_sub_site_overrides_for_park: dict[str, list[float]] = {}
 if _park_model and _park_model.sub_sites:
-    _sub_sites_payload = [
-        {"name": s.name, "county": s.county, "capacity_mw": s.capacity_mw, "lat": s.lat, "lon": s.lon}
-        for s in _park_model.sub_sites
-    ]
+    _all_sub_overrides = _load_sub_site_overrides()
+    _sub_site_overrides_for_park = _all_sub_overrides.get(selected_park_id, {})
+    _sub_sites_payload = []
+    for s in _park_model.sub_sites:
+        _ov = _sub_site_overrides_for_park.get(s.name)
+        _lat = float(_ov[0]) if _ov else s.lat
+        _lon = float(_ov[1]) if _ov else s.lon
+        _sub_sites_payload.append({
+            "name": s.name,
+            "county": s.county,
+            "capacity_mw": s.capacity_mw,
+            "lat": _lat,
+            "lon": _lon,
+            "is_overridden": _ov is not None,
+            "original_lat": s.lat,
+            "original_lon": s.lon,
+        })
 
 if _sub_sites_payload:
     _sat_caption = (
@@ -782,7 +825,7 @@ components.html(
     scrolling=False,
 )
 
-# Show coords and quick links if focused on a specific site
+# Show coords + quick links + coord editor if focused on a specific site
 if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_sub_sites_payload):
     _fs = _sub_sites_payload[_focused_idx]
     _gmaps = f"https://www.google.com/maps/@{_fs['lat']},{_fs['lon']},17z/data=!3m1!1e3"
@@ -791,16 +834,21 @@ if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_
         "https://overpass-turbo.eu/?Q="
         + f"%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0Anwr%5B%22power%22%3D%22plant%22%5D%5B%22plant%3Asource%22%3D%22solar%22%5D%28around%3A8000%2C{_fs['lat']}%2C{_fs['lon']}%29%3B%0Aout+geom%3B"
     )
+    _override_tag = (
+        '<span style="color:#7dd3fc; font-size:0.7rem; margin-left:8px; '
+        'background:rgba(125,211,252,0.12); padding:1px 6px; border-radius:3px;">corrected</span>'
+        if _fs["is_overridden"] else ""
+    )
     st.markdown(
         f"""
         <div style="
-            margin: 8px 0 12px; padding: 10px 14px;
+            margin: 8px 0 4px; padding: 10px 14px;
             background: rgba(132, 204, 22, 0.05);
             border: 1px solid rgba(132, 204, 22, 0.25);
             border-radius: 8px;
             font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
             color: #cbd5e1; letter-spacing: 0.02em;">
-          <span style="color: #84cc16; font-weight: 600;">▸ {_fs['name']}</span>
+          <span style="color: #84cc16; font-weight: 600;">▸ {_fs['name']}</span>{_override_tag}
           &nbsp;·&nbsp; Co. {_fs['county']} &nbsp;·&nbsp; {_fs['capacity_mw']:.1f} MW &nbsp;·&nbsp;
           <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs['lat']}, {_fs['lon']}</code>
           <div style="margin-top: 6px; font-size: 0.72rem;">
@@ -812,6 +860,45 @@ if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_
         """,
         unsafe_allow_html=True,
     )
+
+    # ----- Coord correction editor -----
+    with st.expander("✎ Correct this site's position", expanded=False):
+        st.caption(
+            "Once you've located the actual solar farm on Google Maps or OSM, paste the precise "
+            "lat/lon below. The correction is saved to `data/sub_site_overrides.yaml` and the marker "
+            "turns blue (corrected). Original commune-level coords are preserved for rollback."
+        )
+        _ed_cols = st.columns([2, 2, 1, 1])
+        _new_lat = _ed_cols[0].number_input(
+            "Latitude",
+            value=float(_fs["lat"]),
+            min_value=-90.0, max_value=90.0,
+            step=0.0001, format="%.6f",
+            key=f"edit-lat-{selected_park_id}-{_focused_idx}",
+        )
+        _new_lon = _ed_cols[1].number_input(
+            "Longitude",
+            value=float(_fs["lon"]),
+            min_value=-180.0, max_value=180.0,
+            step=0.0001, format="%.6f",
+            key=f"edit-lon-{selected_park_id}-{_focused_idx}",
+        )
+        _ed_cols[2].markdown("<br>", unsafe_allow_html=True)
+        _ed_cols[3].markdown("<br>", unsafe_allow_html=True)
+        if _ed_cols[2].button("Save", key=f"save-coord-{selected_park_id}-{_focused_idx}", use_container_width=True, type="primary"):
+            _save_sub_site_override(selected_park_id, _fs["name"], _new_lat, _new_lon)
+            st.cache_data.clear()
+            st.success(f"Position saved for {_fs['name']}")
+            st.rerun()
+        if _fs["is_overridden"]:
+            if _ed_cols[3].button("Reset", key=f"reset-coord-{selected_park_id}-{_focused_idx}", use_container_width=True):
+                _delete_sub_site_override(selected_park_id, _fs["name"])
+                st.cache_data.clear()
+                st.info(f"Position reset to original for {_fs['name']}")
+                st.rerun()
+            st.caption(
+                f"Original commune coords: {_fs['original_lat']:.6f}, {_fs['original_lon']:.6f}"
+            )
 
 # ---------------------------------------------------------------------------
 # Detail panel — fetch PVGIS and render
