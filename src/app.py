@@ -182,12 +182,14 @@ def _build_satellite_html(
     label: str,
     sites_count: int = 1,
     sub_sites: list[dict] | None = None,
+    focused_sub_idx: int | None = None,
 ) -> str:
     """Render a satellite map.
 
     For single-site parks : zoom 14, single marker on the panels.
     For multi-site portfolios with `sub_sites` provided (ex. Elgin Ireland) : zoom auto-fit on
-    bounding box, real markers at commune-level coordinates with name/county/capacity tooltips.
+    bounding box of all sub-sites. If `focused_sub_idx` is set, jump to that site at zoom 16
+    and highlight its marker. Real markers at commune-level coordinates with name/county/capacity tooltips.
     For multi-site portfolios without `sub_sites` (ex. Brindisi) : zoom 8, scatter `sites_count`
     deterministic random sub-markers as a visual proxy.
     """
@@ -196,6 +198,7 @@ def _build_satellite_html(
     multi = sites_count > 1
     has_real_subs = bool(sub_sites)
     sub_sites_json = _json.dumps(sub_sites or [])
+    focused_json = _json.dumps(focused_sub_idx)
     initial_zoom = 8 if multi else 14
     return f"""
 <!DOCTYPE html>
@@ -236,31 +239,43 @@ def _build_satellite_html(
   const N = {sites_count};
   const subSites = {sub_sites_json};
   const hasRealSubs = {str(has_real_subs).lower()};
+  const focusedIdx = {focused_json};
   if (multi && hasRealSubs) {{
     // Real sub-sites — render markers at commune-level coords with rich popups
     const points = subSites.map(s => [s.lat, s.lon]);
-    subSites.forEach(s => {{
+    subSites.forEach((s, i) => {{
+      const isFocused = (i === focusedIdx);
       const marker = L.circleMarker([s.lat, s.lon], {{
-        radius: 5, color: '#e8e4d6', weight: 1.5,
-        fillColor: '#e8e4d6', fillOpacity: 0.9,
+        radius: isFocused ? 9 : 5,
+        color: isFocused ? '#84cc16' : '#e8e4d6',
+        weight: isFocused ? 2.5 : 1.5,
+        fillColor: isFocused ? '#84cc16' : '#e8e4d6',
+        fillOpacity: isFocused ? 0.95 : 0.9,
       }}).addTo(map);
       marker.bindPopup(
         '<div style="font-family: Geist, sans-serif; font-size: 12px; min-width: 180px;">' +
         '<div style="font-weight: 600; color: #f1f5f9; margin-bottom: 3px;">' + s.name + '</div>' +
         '<div style="color: #94a3b8; font-size: 11px;">Co. ' + s.county + ' · ' + s.capacity_mw.toFixed(1) + ' MW</div>' +
+        '<div style="color: #7a7464; font-size: 10px; margin-top: 4px;">' + s.lat.toFixed(4) + ', ' + s.lon.toFixed(4) + '</div>' +
         '</div>'
       );
       marker.bindTooltip(s.name + ' · ' + s.capacity_mw.toFixed(1) + ' MW', {{
         permanent: false, direction: 'top', offset: [0, -8],
       }});
+      if (isFocused) marker.openPopup();
     }});
-    // Centroid pin (subtle)
-    L.circleMarker([{lat}, {lon}], {{
-      radius: 4, color: '#84cc16', weight: 1.5,
-      fillColor: '#84cc16', fillOpacity: 0.5,
-    }}).addTo(map).bindPopup('Portfolio centroid · {sites_count} known candidate sites');
-    // Auto-fit to bounding box of all sub-sites
-    if (points.length > 0) {{
+    // Centroid pin (subtle, hidden when focused on a single site)
+    if (focusedIdx === null) {{
+      L.circleMarker([{lat}, {lon}], {{
+        radius: 4, color: '#84cc16', weight: 1.5,
+        fillColor: '#84cc16', fillOpacity: 0.5,
+      }}).addTo(map).bindPopup('Portfolio centroid · {sites_count} known candidate sites');
+    }}
+    // Either focus on a specific site (zoom 16) or fit bounds of all sites
+    if (focusedIdx !== null && subSites[focusedIdx]) {{
+      const f = subSites[focusedIdx];
+      map.setView([f.lat, f.lon], 16);
+    }} else if (points.length > 0) {{
       map.fitBounds(L.latLngBounds(points), {{ padding: [40, 40] }});
     }}
   }} else if (multi) {{
@@ -731,6 +746,29 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Focus selector for portfolios with real sub_sites
+_focus_key = f"sat-focus-{selected_park_id}"
+_focused_idx: int | None = st.session_state.get(_focus_key)
+if _sub_sites_payload:
+    _per_row = 6
+    _items: list[tuple[str, int | None]] = [("◉ Overview", None)] + [
+        (s["name"], i) for i, s in enumerate(_sub_sites_payload)
+    ]
+    for _row_start in range(0, len(_items), _per_row):
+        _row = _items[_row_start : _row_start + _per_row]
+        _cols = st.columns(_per_row)
+        for _ci, (_label, _idx_val) in enumerate(_row):
+            _btn_key = f"focus-btn-{selected_park_id}-{_idx_val if _idx_val is not None else 'all'}"
+            _is_active = _focused_idx == _idx_val
+            if _cols[_ci].button(
+                _label,
+                key=_btn_key,
+                use_container_width=True,
+                type=("primary" if _is_active else "secondary"),
+            ):
+                st.session_state[_focus_key] = _idx_val
+                st.rerun()
+
 components.html(
     _build_satellite_html(
         lat=float(selected_row["lat"]),
@@ -738,10 +776,42 @@ components.html(
         label=selected_row["name"],
         sites_count=_sites_count,
         sub_sites=_sub_sites_payload,
+        focused_sub_idx=_focused_idx,
     ),
     height=360,
     scrolling=False,
 )
+
+# Show coords and quick links if focused on a specific site
+if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_sub_sites_payload):
+    _fs = _sub_sites_payload[_focused_idx]
+    _gmaps = f"https://www.google.com/maps/@{_fs['lat']},{_fs['lon']},17z/data=!3m1!1e3"
+    _osm = f"https://www.openstreetmap.org/?mlat={_fs['lat']}&mlon={_fs['lon']}#map=16/{_fs['lat']}/{_fs['lon']}"
+    _overpass = (
+        "https://overpass-turbo.eu/?Q="
+        + f"%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0Anwr%5B%22power%22%3D%22plant%22%5D%5B%22plant%3Asource%22%3D%22solar%22%5D%28around%3A8000%2C{_fs['lat']}%2C{_fs['lon']}%29%3B%0Aout+geom%3B"
+    )
+    st.markdown(
+        f"""
+        <div style="
+            margin: 8px 0 12px; padding: 10px 14px;
+            background: rgba(132, 204, 22, 0.05);
+            border: 1px solid rgba(132, 204, 22, 0.25);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+            color: #cbd5e1; letter-spacing: 0.02em;">
+          <span style="color: #84cc16; font-weight: 600;">▸ {_fs['name']}</span>
+          &nbsp;·&nbsp; Co. {_fs['county']} &nbsp;·&nbsp; {_fs['capacity_mw']:.1f} MW &nbsp;·&nbsp;
+          <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs['lat']}, {_fs['lon']}</code>
+          <div style="margin-top: 6px; font-size: 0.72rem;">
+            <a href="{_gmaps}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">Open in Google Maps satellite ↗</a>
+            <a href="{_osm}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">OpenStreetMap ↗</a>
+            <a href="{_overpass}" target="_blank" style="color: #7dd3fc;">Overpass query (find OSM solar plants nearby) ↗</a>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Detail panel — fetch PVGIS and render
