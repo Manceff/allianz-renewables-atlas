@@ -432,6 +432,329 @@ if selected_row.empty:
     st.rerun()
 selected_row = selected_row.iloc[0]
 
+# ---------------------------------------------------------------------------
+# Forward-sale portfolios: branch to minimal panel (no T12M / Live / Backtest)
+# ---------------------------------------------------------------------------
+
+from src.lib.parks_loader import get_park_by_id as _get_park_for_status
+_park_model_for_status = _get_park_for_status(selected_park_id)
+_is_forward_sale = (
+    _park_model_for_status is not None
+    and _park_model_for_status.portfolio_status == "forward_sale"
+)
+
+if _is_forward_sale:
+    from src.lib.portfolio_model import (
+        compute_portfolio_typical_year,
+        compute_portfolio_revenue_flat,
+    )
+    import datetime as _dt_fs
+
+    # Park header
+    st.markdown(
+        f"""
+        <div class="park-header">
+          <div class="park-title">{selected_row['name']}</div>
+          <div class="park-stats">
+            <div class="stat">
+              <div class="stat-label">Country</div>
+              <div class="stat-value">{selected_row['country']}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Nameplate (DC)</div>
+              <div class="stat-value">{selected_row['capacity_mwp']:,.0f} <span class="stat-unit">MWp</span></div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Acquisition</div>
+              <div class="stat-value">{selected_row['commissioning_year']}</div>
+            </div>
+            <div class="stat stat-wide">
+              <div class="stat-label">Operator</div>
+              <div class="stat-value stat-operator">{selected_row['operator']}</div>
+            </div>
+            <div class="stat stat-source">
+              <div class="stat-label">Source</div>
+              <div class="stat-value"><a href="{selected_row['press_release_url']}" target="_blank">press release ↗</a></div>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Forward-sale context banner
+    n_subs = len(_park_model_for_status.sub_sites or [])
+    n_connected = sum(1 for s in (_park_model_for_status.sub_sites or []) if s.seai_status == "Connected")
+    n_contracted = n_subs - n_connected
+    st.markdown(
+        f"""
+        <div style="
+          margin: 14px 0 18px; padding: 14px 18px;
+          background: rgba(125, 211, 252, 0.07);
+          border: 1px solid rgba(125, 211, 252, 0.30);
+          border-radius: 10px;
+          font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+          color: #cbd5e1; line-height: 1.55;">
+          <div style="font-weight: 600; color: #7dd3fc; margin-bottom: 6px; letter-spacing: 0.04em;">
+            ▸ FORWARD-SALE PORTFOLIO — NOT YET PRODUCING
+          </div>
+          Allianz acquired this {n_subs}-site portfolio in <b>December 2023</b> as a forward sale :
+          permits + EirGrid grid-connection rights + RESS-2/3 state-secured revenue contracts —
+          <b>not operating panels</b>. As of latest SEAI Solar Atlas snapshot,
+          <b>{n_connected} of {n_subs} sites are grid-connected</b> ({n_contracted} contracted only).
+          Live / T12M / backtest sections are skipped — the metrics below are <b>theoretical</b>,
+          assuming full energization across all sites at their actual locations,
+          using pvlib hourly weather (Open-Meteo Archive) at each site's GPS coords.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Compute per-site pvlib over a baseline calendar year
+    @st.cache_data(ttl=86400, show_spinner=False)
+    def _compute_portfolio_typical_cached(park_id: str, sub_sites_tuple: tuple, dc_ac: float) -> dict | None:
+        sub_sites_list = [
+            {"name": n, "lat": la, "lon": lo, "capacity_mw": mw}
+            for (n, la, lo, mw) in sub_sites_tuple
+        ]
+        baseline_end = _dt_fs.date.today() - _dt_fs.timedelta(days=ARCHIVE_LAG_DAYS)
+        baseline_start = baseline_end - _dt_fs.timedelta(days=T12M_DAYS - 1)
+        return compute_portfolio_typical_year(
+            sub_sites=sub_sites_list,
+            baseline_start=baseline_start,
+            baseline_end=baseline_end,
+            dc_ac_ratio=dc_ac,
+        )
+
+    sub_sites_for_calc = tuple(
+        (s.name, s.lat, s.lon, s.capacity_mw)
+        for s in (_park_model_for_status.sub_sites or [])
+    )
+
+    with st.spinner(f"Computing pvlib for {n_subs} sites individually…"):
+        portfolio = _compute_portfolio_typical_cached(
+            selected_park_id, sub_sites_for_calc, _park_model_for_status.dc_ac_ratio,
+        )
+
+    if not portfolio:
+        st.error("Portfolio production calculation failed.")
+        st.stop()
+
+    annual_mwh = portfolio["annual_total_mwh"]
+    total_cap_ac = portfolio["total_capacity_mw_ac"]
+    total_cap_dc = portfolio["total_capacity_mwp_dc"]
+    cf_pct = (annual_mwh * 1000.0) / (total_cap_dc * 1000.0 * 8760.0) * 100.0
+
+    # ----- Headline metrics -----
+    st.markdown(
+        f"""
+        <div class="section-header section-first">
+          <span class="section-label">Projected annual output (full energization)</span>
+          <span class="section-caption">
+            Hour-by-hour pvlib reconstruction — each of the {n_subs} sites computed at its
+            <b>own GPS coordinates</b> using site-specific weather (Open-Meteo Archive).
+            Aggregate is the sum across all sites. Baseline window : last 12 months of available weather.
+          </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    pm1, pm2, pm3, pm4 = st.columns(4)
+    pm1.metric(
+        "Projected annual output",
+        f"{annual_mwh:,.0f} MWh",
+        help=(
+            "Sum of pvlib hourly outputs across all sub-sites over the last 365 days of available weather data, "
+            "assuming all sites are fully energized at their nameplate capacity. Reality today is FAR lower "
+            "because most sites are still under construction (see SEAI status column below)."
+        ),
+    )
+    pm2.metric(
+        "Total nameplate (AC / DC)",
+        f"{total_cap_ac:,.1f} / {total_cap_dc:,.0f} MW",
+        help=(
+            f"AC export capacity (sum of contracted MW with EirGrid) / DC peak (panels), "
+            f"using DC/AC over-build {_park_model_for_status.dc_ac_ratio:.2f}. "
+            "DC is what the press release quotes (191 MWp), AC is what the grid sees (≈137 MW)."
+        ),
+    )
+    pm3.metric(
+        "Capacity factor",
+        f"{cf_pct:.1f} %",
+        help=(
+            "Projected capacity factor across the portfolio. Irish solar typically achieves 11-13% "
+            "due to high latitude + cloud cover. South-Iberia benchmarks for comparison: 19-22%."
+        ),
+    )
+
+    if _park_model_for_status.ress_strike_price_eur_mwh:
+        rev = compute_portfolio_revenue_flat(
+            annual_production_mwh=annual_mwh,
+            strike_price_eur_mwh=_park_model_for_status.ress_strike_price_eur_mwh,
+        )
+        pm4.metric(
+            "Projected annual revenue",
+            f"€ {rev['annual_revenue_meur']:.2f} M",
+            help=(
+                f"Annual MWh × RESS strike price ({_park_model_for_status.ress_strike_price_eur_mwh:.0f} €/MWh weighted avg, "
+                f"RESS-2/3 2-way CfD). State-backed contract neutralises wholesale price volatility and "
+                f"solar cannibalisation — the project earns the strike price on every MWh sold for ~15 years."
+            ),
+        )
+    else:
+        pm4.metric("Projected annual revenue", "—", help="No RESS strike price configured.")
+
+    # ----- Per-site breakdown -----
+    st.markdown(
+        """
+        <div class="section-header">
+          <span class="section-label">Per-site breakdown</span>
+          <span class="section-caption">
+            EirGrid canonical project data (Firm Access 2024 Review) + SEAI Solar Atlas (precise GPS + connection status)
+            + pvlib annual output computed at each site's coordinates. Cap factors vary by latitude and microclimate.
+          </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    import pandas as pd_ps
+    rows = []
+    for s, calc in zip(_park_model_for_status.sub_sites or [], portfolio["per_site"]):
+        rows.append({
+            "Site (commune)": s.name,
+            "EirGrid name": s.eirgrid_name or "—",
+            "EirGrid code": s.eirgrid_code or "—",
+            "Co.": s.county,
+            "MW (AC)": s.capacity_mw,
+            "MW (DC)": calc["capacity_mwp_dc"],
+            "Annual MWh (pvlib)": int(calc["annual_mwh"]),
+            "CF %": round(calc["capacity_factor_pct"], 1),
+            "Status (SEAI)": s.seai_status or "—",
+            "Firm access (EirGrid)": s.firm_access or "—",
+        })
+    df_subs = pd_ps.DataFrame(rows)
+    st.dataframe(df_subs, use_container_width=True, hide_index=True)
+
+    # ----- Sub-sites caption + map -----
+    if _park_model_for_status.sub_sites_caption:
+        st.markdown(
+            f"""
+            <div style="margin: 14px 0 8px; padding: 10px 14px;
+              background: rgba(232, 228, 214, 0.04);
+              border: 1px solid rgba(232, 228, 214, 0.18);
+              border-radius: 8px;
+              font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+              color: #94a3b8; line-height: 1.5;">
+              {_park_model_for_status.sub_sites_caption}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # ----- Map (re-use the multi-site renderer) -----
+    st.markdown(
+        """
+        <div class="section-header">
+          <span class="section-label">Site locations</span>
+          <span class="section-caption">
+            Real GPS coordinates from SEAI Solar Atlas. Click a button to focus on any site,
+            double-click on the panels to override the position.
+          </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    _sub_sites_payload_fs = []
+    _sub_site_overrides_fs = _load_sub_site_overrides().get(selected_park_id, {})
+    for s in _park_model_for_status.sub_sites:
+        ov = _sub_site_overrides_fs.get(s.name)
+        _sub_sites_payload_fs.append({
+            "name": s.name,
+            "county": s.county,
+            "capacity_mw": s.capacity_mw,
+            "lat": float(ov[0]) if ov else s.lat,
+            "lon": float(ov[1]) if ov else s.lon,
+            "is_overridden": ov is not None,
+            "original_lat": s.lat,
+            "original_lon": s.lon,
+        })
+
+    _focus_key_fs = f"sat-focus-{selected_park_id}"
+    _focused_idx_fs = st.session_state.get(_focus_key_fs)
+
+    _per_row_fs = 6
+    _items_fs = [("◉ Overview", None)] + [(s["name"], i) for i, s in enumerate(_sub_sites_payload_fs)]
+    for _row_start in range(0, len(_items_fs), _per_row_fs):
+        _row = _items_fs[_row_start : _row_start + _per_row_fs]
+        _cols = st.columns(_per_row_fs)
+        for _ci, (_label, _idx_val) in enumerate(_row):
+            _btn_key = f"focus-fs-{selected_park_id}-{_idx_val if _idx_val is not None else 'all'}"
+            _is_active = _focused_idx_fs == _idx_val
+            if _cols[_ci].button(
+                _label, key=_btn_key, use_container_width=True,
+                type=("primary" if _is_active else "secondary"),
+            ):
+                st.session_state[_focus_key_fs] = _idx_val
+                st.rerun()
+
+    if _focused_idx_fs is not None and 0 <= _focused_idx_fs < len(_sub_sites_payload_fs):
+        _fs_pt = _sub_sites_payload_fs[_focused_idx_fs]
+        from src.components.coord_picker import coord_picker as _coord_picker_fs
+        _picker_label = f"{_fs_pt['name']} · Co. {_fs_pt['county']} · {_fs_pt['capacity_mw']:.1f} MW"
+        _new_coords = _coord_picker_fs(
+            lat=float(_fs_pt["lat"]), lon=float(_fs_pt["lon"]),
+            label=_picker_label, height=420,
+            key=f"sub-coord-picker-fs-{selected_park_id}-{_focused_idx_fs}",
+        )
+        if _new_coords:
+            _new_lat, _new_lon = float(_new_coords[0]), float(_new_coords[1])
+            _existing = _sub_site_overrides_fs.get(_fs_pt["name"])
+            _is_new_save = (not _existing) or (
+                abs(_existing[0] - _new_lat) > 1e-5 or abs(_existing[1] - _new_lon) > 1e-5
+            )
+            if _is_new_save:
+                _save_sub_site_override(selected_park_id, _fs_pt["name"], _new_lat, _new_lon)
+                st.cache_data.clear()
+                st.success(f"Position saved for {_fs_pt['name']} → {_new_lat:.5f}, {_new_lon:.5f}")
+                st.rerun()
+        _gmaps = f"https://www.google.com/maps/@{_fs_pt['lat']},{_fs_pt['lon']},17z/data=!3m1!1e3"
+        _osm = f"https://www.openstreetmap.org/?mlat={_fs_pt['lat']}&mlon={_fs_pt['lon']}#map=16/{_fs_pt['lat']}/{_fs_pt['lon']}"
+        st.markdown(
+            f"""<div style="margin: 8px 0 4px; padding: 10px 14px;
+              background: rgba(132, 204, 22, 0.05);
+              border: 1px solid rgba(132, 204, 22, 0.25);
+              border-radius: 8px;
+              font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+              color: #cbd5e1; letter-spacing: 0.02em;">
+              <span style="color: #84cc16; font-weight: 600;">▸ {_fs_pt['name']}</span>
+              &nbsp;·&nbsp; Co. {_fs_pt['county']} &nbsp;·&nbsp; {_fs_pt['capacity_mw']:.1f} MW &nbsp;·&nbsp;
+              <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs_pt['lat']}, {_fs_pt['lon']}</code>
+              <div style="margin-top: 6px; font-size: 0.72rem;">
+                <a href="{_gmaps}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">Open in Google Maps ↗</a>
+                <a href="{_osm}" target="_blank" style="color: #7dd3fc;">OSM ↗</a>
+              </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    else:
+        components.html(
+            _build_satellite_html(
+                lat=float(selected_row["lat"]),
+                lon=float(selected_row["lon"]),
+                label=selected_row["name"],
+                sites_count=len(_sub_sites_payload_fs),
+                sub_sites=_sub_sites_payload_fs,
+                focused_sub_idx=None,
+            ),
+            height=400,
+            scrolling=False,
+        )
+
+    st.stop()  # Skip Live / T12M / Backtest sections for forward-sale portfolios
+
 # T12M rolling window — last 12 months of available data
 import datetime as _dt_mod
 _today = _dt_mod.date.today()

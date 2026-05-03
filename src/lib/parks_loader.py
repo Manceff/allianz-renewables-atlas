@@ -36,15 +36,25 @@ class Technology(str, Enum):
 
 
 class SubSite(BaseModel):
-    """Sous-site d'un portfolio multi-sites (ex. Elgin Ireland 16 sites)."""
+    """Sous-site d'un portfolio multi-sites (ex. Elgin Ireland 16 sites).
+
+    Coords are physical site location (commune-level if commune source, or precise from SEAI Solar Atlas).
+    `capacity_mw` is AC export capacity (what's contracted on RESS / EirGrid). DC peak ≈ AC × dc_ac_ratio.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str = Field(min_length=1)
     county: str = Field(min_length=1)
-    capacity_mw: float = Field(ge=0)
+    capacity_mw: float = Field(ge=0, description="AC export capacity in MWac")
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
+    eirgrid_code: str | None = Field(default=None, description="EirGrid project code (DG1xxx / TGxxx)")
+    eirgrid_name: str | None = Field(default=None, description="Canonical EirGrid project name")
+    station: str | None = Field(default=None, description="Grid connection station")
+    seai_status: str | None = Field(default=None, description="Connected | Contracted | None (per SEAI Solar Atlas)")
+    firm_access: str | None = Field(default=None, description="EirGrid Firm Access date (e.g. 'in 2024', 'from 2028')")
+    note: str | None = None
 
 
 class ParkModel(BaseModel):
@@ -69,6 +79,17 @@ class ParkModel(BaseModel):
     excluded_from_sweep: bool = False
     sub_sites: tuple[SubSite, ...] | None = None
     sub_sites_caption: str | None = None
+    portfolio_status: str | None = Field(
+        default=None,
+        description="'forward_sale' (Allianz bought permits / RESS contracts pre-build, no production yet), "
+                    "'operating' (panels generating), or None (single-site or not specified).",
+    )
+    dc_ac_ratio: float = Field(default=1.30, ge=1.0, le=2.0)
+    ress_strike_price_eur_mwh: float | None = Field(
+        default=None,
+        description="If RESS-secured (Irish auction floor), the contracted strike €/MWh. "
+                    "Pricing is a 2-way CfD so cannibalisation = 0 from project perspective.",
+    )
 
     @field_validator("coordinates", mode="before")
     @classmethod

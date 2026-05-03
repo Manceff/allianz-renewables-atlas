@@ -188,37 +188,199 @@ parks:
     name: "Elgin Ireland Solar Portfolio (16 sites)"
     country: IE
     technology: solar
-    coordinates: [53.77, -7.16]  # centroïde portefeuille, sites multiples
+    coordinates: [53.55, -7.5]  # centroïde portefeuille, recalibré avec coords SEAI
     capacity_mwp: 191
     commissioning_year: 2025
     operator: "Elgin Energy Services Limited"
     allianz_stake_pct: 100
     acquisition_year: 2023
     press_release_url: "https://www.elgin.com/news/elgin-energy-celebrates-milestone-portfolio-sale"
-    notes: "Une des plus grosses transactions solaires irlandaises en capacité. 16 projets distribués (14 RESS-2, 2 RESS-3 — revenus sécurisés par contrats d'État). Forward sale signée déc 2023, energisation échelonnée 2024-2025. Elgin reste asset manager + EPC."
-    # Sub-sites identifiés depuis elgin.com/projects (RESS-2 + RESS-3 candidats).
-    # 17 candidats pour 16 places dans le portfolio Allianz — Elgin ne disambigue pas
-    # publiquement. Coordonnées = centroïdes des communes (±5 km, pas adresses parcelles).
-    # Total déclaré 191 MWp DC ≈ 137 MWac × 1.39 (DC/AC over-build, standard utility-scale).
+    notes: "Forward sale signée déc 2023. 16 projets RESS-2/3 (revenus sécurisés par contrats d'État, CfD 2-voies). Allianz a acheté permis + droits raccordement EirGrid + contrats RESS — pas des panneaux fonctionnels. Énergisation échelonnée 2024-2030 selon l'EirGrid Firm Access 2024 Review."
+    portfolio_status: "forward_sale"
+    dc_ac_ratio: 1.40  # 191 MWp DC / 137 MWac contracted = 1.39
+    ress_strike_price_eur_mwh: 95.0  # RESS-2 weighted avg, 2-way CfD (cannibalisation neutralisée)
+    # Sub-sites enrichis avec :
+    #   - coords précises depuis SEAI Solar Atlas (api maps.seai.ie/server/rest/services/SolarAtlas/)
+    #   - EirGrid code + nom canonique + station + firm-access date
+    #     depuis Firm Access 2024 Review Report (juin 2024, annexe 5.2)
+    #   - statut SEAI : Connected (produit aujourd'hui) ou Contracted (contrat raccordement, panneaux pas connectés)
+    # 17 candidats pour 16 places — Athboy/Martinstown est le plus probable hors-portfolio
+    # (seul site sans EirGrid code dans la Firm Access 2024 list).
     sub_sites:
-      - { name: "Pickering Forest",  county: "Kildare",   capacity_mw: 25.0, lat: 53.3389, lon: -6.5460 }
-      - { name: "Marlinstown",       county: "Westmeath", capacity_mw: 4.0,  lat: 53.5258, lon: -7.3200 }
-      - { name: "Monread",           county: "Kildare",   capacity_mw: 4.0,  lat: 53.2168, lon: -6.6649 }
-      - { name: "Glenamaddy",        county: "Galway",    capacity_mw: 4.0,  lat: 53.6133, lon: -8.5600 }  # RESS-3 winner "Galway"
-      - { name: "Talbots Inch",      county: "Kilkenny",  capacity_mw: 6.0,  lat: 52.6650, lon: -7.2500 }
-      - { name: "Ballynilard",       county: "Tipperary", capacity_mw: 4.0,  lat: 52.5100, lon: -7.9200 }
-      - { name: "Ballyragget",       county: "Kilkenny",  capacity_mw: 35.0, lat: 52.7884, lon: -7.3360 }
-      - { name: "Athboy",            county: "Meath",     capacity_mw: 5.35, lat: 53.6233, lon: -6.9128 }
-      - { name: "Tullynally",        county: "Westmeath", capacity_mw: 4.0,  lat: 53.6810, lon: -7.3000 }
-      - { name: "Finnea",            county: "Cavan",     capacity_mw: 4.0,  lat: 53.7800, lon: -7.3900 }
-      - { name: "Edgeworthstown",    county: "Longford",  capacity_mw: 4.0,  lat: 53.6970, lon: -7.6100 }
-      - { name: "Kilmacthomas",      county: "Waterford", capacity_mw: 4.0,  lat: 52.2050, lon: -7.4000 }
-      - { name: "Castlerea",         county: "Roscommon", capacity_mw: 4.0,  lat: 53.7585, lon: -8.4910 }
-      - { name: "Tullamore",         county: "Offaly",    capacity_mw: 5.8,  lat: 53.2734, lon: -7.4894 }
-      - { name: "Portarlington",     county: "Offaly",    capacity_mw: 4.0,  lat: 53.1635, lon: -7.1854 }
-      - { name: "Bagenalstown",      county: "Carlow",    capacity_mw: 4.0,  lat: 52.6953, lon: -6.9619 }  # RESS-3 winner "Carlow"
-      - { name: "Liss",              county: "Meath",     capacity_mw: 4.0,  lat: 53.6650, lon: -6.7800 }  # approx
-    sub_sites_caption: "17 candidate sites identified from elgin.com/projects (RESS-2 + RESS-3). The Allianz portfolio is 16 of these — exact list not publicly disambiguated by Elgin Energy. Commune-level coords ±5 km."
+      - name: "Pickering Forest"
+        county: "Kildare"
+        capacity_mw: 25.0
+        lat: 53.35200
+        lon: -6.60791
+        eirgrid_code: "DG1353"
+        eirgrid_name: "Taghadoe Solar Farm"
+        station: "Griffinrath"
+        seai_status: "Contracted"
+        firm_access: "4.5 MW in 2024, 25 MW from 2028"
+      - name: "Marlinstown"
+        county: "Westmeath"
+        capacity_mw: 4.0
+        lat: 53.52244
+        lon: -7.29088
+        eirgrid_code: "DG1123"
+        eirgrid_name: "Marlinstown Solar Farm (prev Russellstown)"
+        station: "Mullingar"
+        seai_status: "Contracted"
+        firm_access: "from 2029"
+      - name: "Monread"
+        county: "Kildare"
+        capacity_mw: 4.0
+        lat: 53.23971
+        lon: -6.64074
+        eirgrid_code: "DG1162"
+        eirgrid_name: "Kerdiffstown PV"
+        station: "Monread"
+        seai_status: "Contracted"
+        firm_access: "from 2028"
+      - name: "Glenamaddy"
+        county: "Galway"
+        capacity_mw: 4.0
+        lat: 53.59376
+        lon: -8.57732
+        eirgrid_code: "DG1241"
+        eirgrid_name: "Shannagh Beg Solar Farm"
+        station: "Athlone"
+        seai_status: "Contracted"
+        firm_access: "from 2029"
+        note: "Likely RESS-3 winner 'Galway' (per Elgin LinkedIn Aug 2023)"
+      - name: "Talbots Inch"
+        county: "Kilkenny"
+        capacity_mw: 6.0
+        lat: 52.68395
+        lon: -7.28881
+        eirgrid_code: "DG1878"
+        eirgrid_name: "Keatingstown Solar Farm"
+        station: "Kilkenny"
+        seai_status: "Contracted"
+        firm_access: "from 2030"
+      - name: "Ballynilard"
+        county: "Tipperary"
+        capacity_mw: 4.0
+        lat: 52.46792
+        lon: -8.18866
+        eirgrid_code: "DG1850"
+        eirgrid_name: "Ballinalard Solar Farm"
+        station: "Tipperary"
+        seai_status: "Contracted"
+        firm_access: "in 2024"
+      - name: "Ballyragget"
+        county: "Kilkenny"
+        capacity_mw: 35.0
+        lat: 52.79339
+        lon: -7.37028
+        eirgrid_code: "DG1630"
+        eirgrid_name: "Parksgrove Solar Farm"
+        station: "Ballyragget"
+        seai_status: "Contracted"
+        firm_access: "from 2030"
+      - name: "Athboy"
+        county: "Meath"
+        capacity_mw: 5.0
+        lat: 53.63729
+        lon: -6.93895
+        eirgrid_code: null
+        eirgrid_name: "Martinstown Solar (formerly Crowinstown)"
+        station: null
+        seai_status: "Contracted"
+        firm_access: null
+        note: "Not in EirGrid Firm Access 2024 list — likely the candidate NOT in the 16-site Allianz portfolio (1 of 17 odd-one-out)."
+      - name: "Tullynally"
+        county: "Westmeath"
+        capacity_mw: 4.0
+        lat: 53.67639
+        lon: -7.31036
+        eirgrid_code: "DG1166"
+        eirgrid_name: "Tullynally Estate"
+        station: "Mullingar"
+        seai_status: "Contracted"
+        firm_access: "from 2029"
+      - name: "Finnea"
+        county: "Cavan"
+        capacity_mw: 4.0
+        lat: 53.79582
+        lon: -7.39580
+        eirgrid_code: "DG1186"
+        eirgrid_name: "Carrickabane Solar Farm"
+        station: "Shankill"
+        seai_status: "Contracted"
+        firm_access: "in 2024"
+      - name: "Edgeworthstown"
+        county: "Longford"
+        capacity_mw: 4.0
+        lat: 53.70669
+        lon: -7.60661
+        eirgrid_code: "DG1168"
+        eirgrid_name: "Lisnageeragh Solar Farm"
+        station: "Richmond"
+        seai_status: "Contracted"
+        firm_access: "from 2029"
+      - name: "Kilmacthomas"
+        county: "Waterford"
+        capacity_mw: 4.0
+        lat: 52.19386
+        lon: -7.42877
+        eirgrid_code: "DG1167"
+        eirgrid_name: "Cooltubbrid West Solar Farm"
+        station: "Dungarvan"
+        seai_status: "Contracted"
+        firm_access: "in 2024"
+      - name: "Castlerea"
+        county: "Roscommon"
+        capacity_mw: 4.0
+        lat: 53.76467
+        lon: -8.44660
+        eirgrid_code: "DG1165"
+        eirgrid_name: "Rathleg Solar Farm"
+        station: "Carrick on Shannon"
+        seai_status: "Contracted"
+        firm_access: "in 2024"
+      - name: "Tullamore"
+        county: "Offaly"
+        capacity_mw: 4.0
+        lat: 53.29838
+        lon: -7.52248
+        eirgrid_code: "DG1156"
+        eirgrid_name: "Muiniagh Solar Farm"
+        station: "Thornsberry"
+        seai_status: "Contracted"
+        firm_access: "from 2029"
+      - name: "Portarlington"
+        county: "Offaly"
+        capacity_mw: 4.0
+        lat: 53.16181
+        lon: -7.21655
+        eirgrid_code: "DG1150"
+        eirgrid_name: "Shanderry Solar Farm"
+        station: "Portlaoise"
+        seai_status: "Contracted"
+        firm_access: "from 2029"
+      - name: "Bagenalstown"
+        county: "Carlow"
+        capacity_mw: 4.0
+        lat: 52.69815
+        lon: -6.94001
+        eirgrid_code: "DG1145"
+        eirgrid_name: "Kilcarrig Solar PV Farm"
+        station: "Carlow"
+        seai_status: "Contracted"
+        firm_access: "from 2030"
+        note: "Likely RESS-3 winner 'Carlow' (per Elgin LinkedIn Aug 2023)"
+      - name: "Liss"
+        county: "Meath"
+        capacity_mw: 4.0
+        lat: 53.77558
+        lon: -7.13519
+        eirgrid_code: "DG1127"
+        eirgrid_name: "Liss Solar Farm (prev Lands at Liss)"
+        station: "Mullingar"
+        seai_status: "Contracted"
+        firm_access: "from 2029"
+    sub_sites_caption: "17 sites cross-referenced against EirGrid Firm Access 2024 Review (canonical project codes + connection dates) and SEAI Solar Atlas (precise GPS coords + connection status). All 17 are <b>Contracted</b> per SEAI — i.e. the panels are not yet generating; firm access is staggered 2024-2030. Athboy is the most likely candidate NOT in the 16-site Allianz portfolio (no EirGrid code)."
     has_pvgis_estimate: true
     has_reported_production: false
 
