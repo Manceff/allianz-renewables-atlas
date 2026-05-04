@@ -1,0 +1,19 @@
+{
+  "id": "project-brindisi-portfolio",
+  "name": "Project Brindisi Portfolio (10 sites <1 MW)",
+  "country": "IT",
+  "technology": "solar",
+  "coordinates": [
+    40.6383,
+    17.935
+  ],
+  "capacity_mwp": 7.2,
+  "commissioning_year": 2010,
+  "operator": "Elements Green (développeur initial)",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2010,
+  "press_release_url": "https://www.bluefield.eu/news/bluefield-revive-italia-acquires-acp-italian-portfolio",
+  "notes": "Premier investissement solaire ACP S1 2010. Portefeuille de 10 petites centrales <1 MWp construites 2009-2010 sous Conto Energia (autorisation simplifiée DIA). Vendu en 2023 à Bluefield Revive Italia I Srl. Conservé pour traçabilité historique.",
+  "has_pvgis_estimate": true,
+  "has_reported_production": false
+}

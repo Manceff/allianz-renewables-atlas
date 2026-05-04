@@ -1,9 +1,9 @@
 {
-  "estimated_annual_mwh": 73493.68089,
+  "estimated_annual_mwh": 74716.06881999999,
   "reported_annual_mwh": 80000.0,
-  "absolute_delta_mwh": -6506.319109999997,
-  "relative_delta_pct": -8.132898887499994,
+  "absolute_delta_mwh": -5283.931180000014,
+  "relative_delta_pct": -6.604913975000018,
   "severity": "yellow",
-  "interpretation": "Écart de -8.1% — modéré. À vérifier : pertes système réelles, ombrages locaux, ou méthodologie de reporting de l'opérateur.",
+  "interpretation": "Écart de -6.6% — modéré. À vérifier : pertes système réelles, ombrages locaux, ou méthodologie de reporting de l'opérateur.",
   "reported_source": "Allianz Capital Partners press release (25 octobre 2018)"
 }

@@ -1,19 +1,19 @@
 {
   "id": "ourika",
-  "name": "Ourika Solar Park",
+  "name": "Central Solar Fotovoltaica Ourika",
   "country": "PT",
   "technology": "solar",
   "coordinates": [
-    37.65,
-    -8.22
+    37.656,
+    -8.199
   ],
-  "capacity_mwp": 46,
+  "capacity_mwp": 46.1,
   "commissioning_year": 2018,
-  "operator": "WElink Energy",
+  "operator": "WElink Energy / China Triumph International Engineering",
   "allianz_stake_pct": 100,
   "acquisition_year": 2018,
   "press_release_url": "https://www.allianzcapitalpartners.com/media/news/102518-allianz-acquires-first-subsidy-free-solar-project-iberia/",
-  "notes": "Premier parc subsidy-free d'Iberia. 80 GWh/an commissioning, alimente 23 000 foyers.",
+  "notes": "JALON HISTORIQUE : premier parc solaire de grande envergure subsidy-free en péninsule ibérique. 142 000 panneaux sur 100 ha. PPA corporate 20 ans à prix fixe. ~80 GWh/an, 23 000 foyers.",
   "has_pvgis_estimate": true,
   "has_reported_production": true
 }

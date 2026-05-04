@@ -5,15 +5,15 @@
   "technology": "solar",
   "coordinates": [
     31.4462,
-    -99.903
+    -99.9029
   ],
-  "capacity_mwp": 147.0,
+  "capacity_mwp": 147,
   "commissioning_year": 2023,
-  "operator": "Avantus",
+  "operator": "Avantus (minoritaire + asset management) / RES (EPC)",
   "allianz_stake_pct": null,
   "acquisition_year": 2022,
   "press_release_url": "https://avantus.com/news/avantus-and-allianz-capital-partners-announce-completion-of-sale-for-galloway-2-solar-project",
-  "notes": "Concho County, Paint Rock TX. ACP majority stake; Avantus retained minority + asset management. Sale closed Nov 2022, COD 2023. Source canonique opérateur (pas de press release ACP publique).",
+  "notes": "Concho County, Paint Rock TX (réseau ERCOT). ACP = Sponsor Equity majoritaire ; Tax Equity par Tenaska ; dette construction par CIT Bank. ~60 000 personnes alimentées, 18 M$ de taxes locales. Closing nov 2022, COD 2023.",
   "has_pvgis_estimate": true,
   "has_reported_production": false
 }

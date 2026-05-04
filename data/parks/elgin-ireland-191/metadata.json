@@ -7,13 +7,13 @@
     53.77,
     -7.16
   ],
-  "capacity_mwp": 191.0,
+  "capacity_mwp": 191,
   "commissioning_year": 2025,
-  "operator": "Elgin Energy",
-  "allianz_stake_pct": null,
+  "operator": "Elgin Energy Services Limited",
+  "allianz_stake_pct": 100,
   "acquisition_year": 2023,
   "press_release_url": "https://www.elgin.com/news/elgin-energy-celebrates-milestone-portfolio-sale",
-  "notes": "Portefeuille de 16 sites solaires en Irlande (14 RESS-2, 2 RESS-3). Coords = Oldcastle, Co. Meath (site nommé) en proxy portefeuille ; aussi Edgeworthstown (Longford) et Kilmacthomas (Waterford). Énergisation 2024-2025. ~300M€. Source canonique opérateur (pas de PR ACP).",
+  "notes": "Une des plus grosses transactions solaires irlandaises en capacité. 16 projets distribués (14 RESS-2, 2 RESS-3 — revenus sécurisés par contrats d'État). Forward sale signée déc 2023, energisation échelonnée 2024-2025. Elgin reste asset manager + EPC.",
   "has_pvgis_estimate": true,
   "has_reported_production": false
 }

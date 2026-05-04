@@ -1,0 +1,19 @@
+{
+  "id": "grenergy-tabernas",
+  "name": "Tabernas Solar PV Project",
+  "country": "ES",
+  "technology": "solar",
+  "coordinates": [
+    37.05901,
+    -2.30095
+  ],
+  "capacity_mwp": 250,
+  "commissioning_year": 2024,
+  "operator": "Grenergy Renovables (EPC + O&M long-term)",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2023,
+  "press_release_url": "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf",
+  "notes": "Composante principale du portefeuille Grenergy 297 MW (270.6 M€). Andalousie sud, irradiation excellente. Grenergy conserve les early revenues jusqu'à closing financier juin 2025 + responsabilité O&M long-term. COD H2 2024.",
+  "has_pvgis_estimate": true,
+  "has_reported_production": true
+}

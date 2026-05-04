@@ -1,0 +1,19 @@
+{
+  "id": "lacs-medocains-arefii",
+  "name": "Parc Solaire Lacs Médocains (section AREF II)",
+  "country": "FR",
+  "technology": "solar",
+  "coordinates": [
+    45.201,
+    -1.0224
+  ],
+  "capacity_mwp": 9.4,
+  "commissioning_year": 2018,
+  "operator": "BayWa r.e.",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2018,
+  "press_release_url": "https://www.pv-tech.org/baywa-r-e-sells-french-pv-portfolio-to-sonnedix-allianz/",
+  "notes": "Découpe chirurgicale : BayWa r.e. a vendu un parc de 41.2 MW en 4 sections. Sonnedix a pris 3 sections (31.8 MW), AREF II a pris la 4e (~9.4 MW). Hourtin, nord-ouest Bordeaux. Démontre la flexibilité des fonds thématiques d'ACP.",
+  "has_pvgis_estimate": true,
+  "has_reported_production": false
+}

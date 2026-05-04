@@ -1,19 +1,19 @@
 {
   "id": "solara-4",
-  "name": "Solara 4",
+  "name": "Solara 4 (Central Fotovoltaica Alcoutim)",
   "country": "PT",
   "technology": "solar",
   "coordinates": [
-    37.3468,
-    -7.6956
+    37.3947,
+    -7.7043
   ],
   "capacity_mwp": 219,
-  "commissioning_year": 2019,
-  "operator": "WElink + China Triumph International Engineering",
+  "commissioning_year": 2021,
+  "operator": "WElink Energy / China Triumph International Engineering",
   "allianz_stake_pct": 100,
   "acquisition_year": 2018,
   "press_release_url": "https://www.allianzcapitalpartners.com/media/news/121818-allianz-acquire-largest-subsidy-free-solar-project-portugal/",
-  "notes": "Plus grand parc subsidy-free du Portugal au moment de l'acquisition. Renommé Riccardo Totta PV Plant à l'inauguration. 661 500 panneaux sur 320 ha aux paroisses de Vaqueiros et Martim Longo (Alcoutim).",
+  "notes": "Méga-projet 800 ha, 661 500 panneaux. Renommé Riccardo Totta PV Plant à l'inauguration. Initialement prévu 2019, inauguré octobre 2021 (retards construction + COVID). Conçu pour 100 000 foyers. Consolide partenariat ACP-WElink.",
   "has_pvgis_estimate": true,
-  "has_reported_production": false
+  "has_reported_production": true
 }

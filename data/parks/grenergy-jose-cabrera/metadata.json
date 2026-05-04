@@ -1,0 +1,19 @@
+{
+  "id": "grenergy-jose-cabrera",
+  "name": "José Cabrera Solar Project",
+  "country": "ES",
+  "technology": "solar",
+  "coordinates": [
+    40.3541,
+    -2.8954
+  ],
+  "capacity_mwp": 47,
+  "commissioning_year": 2024,
+  "operator": "Grenergy Renovables",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2023,
+  "press_release_url": "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf",
+  "notes": "Actif satellite du portefeuille Grenergy. Castille-La Manche centre. A bénéficié d'une ligne de financement vert dédiée 175 M€ avant intégration Allianz.",
+  "has_pvgis_estimate": true,
+  "has_reported_production": true
+}

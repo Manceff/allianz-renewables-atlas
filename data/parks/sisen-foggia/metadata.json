@@ -1,0 +1,19 @@
+{
+  "id": "sisen-foggia",
+  "name": "Centrale photovoltaïque SiSen",
+  "country": "IT",
+  "technology": "solar",
+  "coordinates": [
+    41.5604,
+    15.6922
+  ],
+  "capacity_mwp": 8,
+  "commissioning_year": 2011,
+  "operator": "Allianz Renewable Energy Fund I (AREF I)",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2013,
+  "press_release_url": "https://www.infrappp.com/news/allianz-acquires-italian-photovoltaic-plant",
+  "notes": "Acquis via le premier fonds AREF I entre fin 2012 et mi-2013. Foggia, Pouilles. Acquisition emblématique du modèle ACP : risque réglementaire italien (décret Spalma-Incentivi) intégré dans la valorisation. ~12 280 MWh/an, alimente 3 000 foyers.",
+  "has_pvgis_estimate": true,
+  "has_reported_production": true
+}

@@ -1,0 +1,19 @@
+{
+  "id": "lotus-solar-farm",
+  "name": "Lotus Solar Farm",
+  "country": "US",
+  "technology": "solar",
+  "coordinates": [
+    36.9411,
+    -119.96
+  ],
+  "capacity_mwp": 67,
+  "commissioning_year": 2020,
+  "operator": "Avantus (ex-8minute Solar Energy)",
+  "allianz_stake_pct": 100,
+  "acquisition_year": 2019,
+  "press_release_url": "https://www.cpuc.ca.gov/-/media/cpuc-website/files/uploadedfiles/cpucwebsite/content/news_room/news_releases/2019/lotus-solar-acquisition.pdf",
+  "notes": "Acquisition Sept 2019 via AllianzGI. 375 acres de pâturage à faible productivité agricole. Comté de Madera, Californie (CAISO). Premier deal californien d'AllianzGI ; tremplin du partenariat avec 8minute (devenue Avantus).",
+  "has_pvgis_estimate": true,
+  "has_reported_production": false
+}
