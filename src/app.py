@@ -1101,11 +1101,28 @@ st.markdown(
 zone = get_zone(selected_row["country"], park_id=selected_park_id)
 fallback_price = get_fallback_price(selected_park_id)
 from src.lib.parks_loader import get_park_by_id as _get_park_for_fit2
+from src.lib.electricity_prices import get_us_zone
+from src.lib.electricity_prices_us import (
+    fetch_caiso_period_prices,
+    fetch_caiso_current_spot,
+    is_us_zone,
+    park_currency,
+    format_money,
+    format_price,
+    CAISO_HUB_BY_ZONE,
+)
 _park_obj_for_fit = _get_park_for_fit2(selected_park_id)
 fit_price = _park_obj_for_fit.fit_strike_price_eur_mwh if _park_obj_for_fit else None
 fit_scheme = _park_obj_for_fit.fit_scheme if _park_obj_for_fit else None
 fit_expiry = _park_obj_for_fit.fit_expiry_year if _park_obj_for_fit else None
 is_fit_locked = fit_price is not None
+
+# US RTO routing: gridstatus for CAISO (real hourly LMP). ERCOT MIS is locked
+# behind login since 2025 — keep flat-fallback for Galloway with a clear note.
+_us_zone = get_us_zone(selected_park_id)
+_currency = park_currency(zone, _us_zone)  # 'USD' for US parks, 'EUR' otherwise
+_is_us_caiso = _us_zone == "US-CAISO"
+_is_us_ercot = _us_zone == "US-ERCOT"
 
 # ---------------------------------------------------------------------------
 # SATELLITE VIEW — Esri imagery zoomed on the panels
@@ -1446,28 +1463,66 @@ elif live_spot and live_spot.get("price_eur_mwh") is not None:
         )
     else:
         l5.metric("Revenue/h (live est.)", "—")
-elif _live_fallback_price is not None:
-    # US parks (Galloway ERCOT, Lotus CAISO) : energy-charts ne couvre pas → flat-price proxy
+elif _is_us_caiso:
+    # CAISO SP15 (Lotus) — real LMP via gridstatus.OASIS, USD native
+    @st.cache_data(ttl=900, show_spinner=False)
+    def _fetch_caiso_live_cached(zone: str) -> dict | None:
+        return fetch_caiso_current_spot(zone)
+
+    caiso_live = _fetch_caiso_live_cached(_us_zone)
+    if caiso_live and caiso_live.get("price_usd_mwh") is not None:
+        usd_spot = caiso_live["price_usd_mwh"]
+        l4.metric(
+            "Spot price (CAISO SP15)",
+            f"$ {usd_spot:,.1f}/MWh",
+            delta=caiso_live["time_iso"][:16].replace("T", " "),
+            delta_color="off",
+            help=(
+                f"Real day-ahead LMP at trading hub TH_SP15_GEN-APND, fetched live via gridstatus.OASIS. "
+                f"Settlement timestamp: {caiso_live['time_iso']}. CAISO publishes the next-day market "
+                "around 13:00 PT, so the most recent settled hour is shown."
+            ),
+        )
+        if live_weather:
+            revenue_now = estimated_mw * usd_spot
+            l5.metric(
+                "Revenue/h (live est.)",
+                f"$ {revenue_now:,.0f}",
+                help="Live output × current CAISO SP15 LMP × 1 hour. Real wholesale exposure (Lotus has a 20-yr PPA with SCE — actual cash flow is locked at PPA strike, not spot).",
+            )
+        else:
+            l5.metric("Revenue/h (live est.)", "—")
+    else:
+        # CAISO fetch failed → degrade to flat proxy in USD
+        usd_proxy = _live_fallback_price * 1.10 if _live_fallback_price else 60.0  # rough EUR→USD
+        l4.metric(
+            "Spot price (CAISO proxy)",
+            f"$ {usd_proxy:.0f}/MWh",
+            delta="flat avg (CAISO unavailable)",
+            delta_color="off",
+            help="CAISO LMP fetch failed. Using flat annual average proxy in USD.",
+        )
+        if live_weather:
+            l5.metric("Revenue/h (proxy)", f"$ {estimated_mw * usd_proxy:,.0f}", delta="at flat avg", delta_color="off")
+        else:
+            l5.metric("Revenue/h (proxy)", "—")
+elif _is_us_ercot:
+    # ERCOT West Hub (Galloway) — MIS locked behind login since 2025, flat-fallback in USD
+    usd_proxy = _live_fallback_price * 1.10 if _live_fallback_price else 35.0
     l4.metric(
-        "Spot price (proxy)",
-        f"{_live_fallback_price:.0f} €/MWh",
-        delta="flat annual avg",
+        "Spot price (ERCOT proxy)",
+        f"$ {usd_proxy:.0f}/MWh",
+        delta="flat avg (MIS auth-walled)",
         delta_color="off",
         help=(
-            f"Hourly zonal data unavailable for this park (US ERCOT/CAISO not on energy-charts.info). "
-            f"Using flat annual average {_live_fallback_price:.0f} €/MWh as proxy. "
-            "Real spot fluctuates intra-day in ERCOT/CAISO — this is illustrative only."
+            f"ERCOT MIS public access was retired in 2025 — hourly LMP data now requires a registered "
+            f"account (https://www.ercot.com/services/comm/mkt_rules/). Using a PPA-effective proxy of "
+            f"~${usd_proxy:.0f}/MWh until credentials are configured. West Hub 2024 day-ahead avg "
+            f"was ~$27/MWh (ERCOT 50% drop YoY due to solar+storage build-out)."
         ),
     )
     if live_weather:
-        revenue_now = estimated_mw * _live_fallback_price
-        l5.metric(
-            "Revenue/h (proxy)",
-            f"€ {revenue_now:,.0f}",
-            delta="at flat avg",
-            delta_color="off",
-            help="Live output estimate × flat annual avg price × 1 hour. Hourly zonal data unavailable.",
-        )
+        l5.metric("Revenue/h (proxy)", f"$ {estimated_mw * usd_proxy:,.0f}", delta="at flat avg", delta_color="off")
     else:
         l5.metric("Revenue/h (proxy)", "—")
 else:
@@ -1891,14 +1946,69 @@ elif zone and period_prices and period_prices.get("prices_eur_mwh"):
     )
     revenue_source = f"hourly day-ahead zone {zone}"
 
-# Priority 3 : flat fallback proxy (US ERCOT/CAISO — PPA-effective approximation)
+# Priority 2b : CAISO real hourly LMP via gridstatus (USD native)
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_caiso_period_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
+    return fetch_caiso_period_prices(
+        zone,
+        _dt_mod.date.fromisoformat(start_iso),
+        _dt_mod.date.fromisoformat(end_iso),
+    )
+
+us_caiso_data = None
+if not revenue_metrics and _is_us_caiso:
+    us_caiso_data = _fetch_caiso_period_cached(_us_zone, T12M_START.isoformat(), T12M_END.isoformat())
+    if us_caiso_data and us_caiso_data.get("prices_usd_mwh"):
+        # Build hourly_prices array aligned to production timestamps
+        usd_lookup = {ts: p for ts, p in zip(us_caiso_data["timestamps"], us_caiso_data["prices_usd_mwh"]) if p is not None}
+        hk = hourly_data["hourly_production_kwh"]
+        prod_ts_iso = hourly_data["timestamps"]
+        import datetime as _dtu
+        spot_weighted_sum = 0.0
+        spot_weighted_prod_kwh = 0.0
+        valid_prices = []
+        for i, ts_iso in enumerate(prod_ts_iso):
+            if i >= len(hk): break
+            try:
+                ts_int = int(_dtu.datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp())
+                ts_hour = ts_int - (ts_int % 3600)
+                p = usd_lookup.get(ts_hour)
+                if p is not None:
+                    spot_weighted_sum += (hk[i] / 1000.0) * p
+                    spot_weighted_prod_kwh += hk[i]
+                    valid_prices.append(p)
+            except (ValueError, AttributeError):
+                continue
+        total_revenue_usd = spot_weighted_sum
+        total_mwh = sum(hk) / 1000.0
+        sp_realized = (spot_weighted_sum / (spot_weighted_prod_kwh / 1000.0)) if spot_weighted_prod_kwh else 0.0
+        sp_simple = (sum(valid_prices) / len(valid_prices)) if valid_prices else 0.0
+        revenue_metrics = {
+            "annual_revenue_eur": total_revenue_usd,  # field reused; UI knows currency
+            "effective_price_eur_mwh": sp_realized,
+            "avg_dayahead_price_eur_mwh": sp_simple,
+            "cannibalization_pct": ((sp_realized - sp_simple) / sp_simple * 100.0) if sp_simple else 0.0,
+        }
+        coverage_pct = (len(valid_prices) / max(len(hk), 1)) * 100.0
+        revenue_source = (
+            f"CAISO SP15 hourly day-ahead LMP via gridstatus.OASIS "
+            f"({len(valid_prices):,}/{len(hk):,} hours covered, {coverage_pct:.0f}%) — USD native"
+        )
+
+# Priority 3 : flat fallback proxy (US ERCOT — MIS locked behind login since 2025)
 if not revenue_metrics and fallback_price is not None:
     flat_prices = [fallback_price] * len(hourly_data["hourly_production_kwh"])
     revenue_metrics = compute_revenue_metrics(
         hourly_production_kwh=hourly_data["hourly_production_kwh"],
         hourly_prices_eur_mwh=flat_prices,
     )
-    revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
+    if _is_us_ercot:
+        revenue_source = (
+            f"flat PPA-effective proxy (${fallback_price:.0f}/MWh) — ERCOT MIS requires login since 2025, "
+            "register at https://www.ercot.com/services/comm/mkt_rules/ to unlock real LMP"
+        )
+    else:
+        revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
 
 _revenue_caption = revenue_source or f"Zone {zone or '—'} not available — revenue cannot be computed."
 
@@ -1919,24 +2029,25 @@ st.markdown(
 r1, r2, r3, r4 = st.columns(4)
 
 if revenue_metrics:
+    _revenue_amount = revenue_metrics["annual_revenue_eur"] / 1_000_000
     r1.metric(
         "Total revenue (T12M)",
-        f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
+        format_money(_revenue_amount, _currency, m_suffix=True),
         help=(
-            f"Total euros earned over the last 12 months. Italian utility-scale plants (>1 MW) under "
+            f"Total earned over the last 12 months. Italian utility-scale plants (>1 MW) under "
             f"Conto Energia receive a DUAL revenue: (1) State-paid feed-in incentive at €{fit_price:.0f}/MWh on every "
             f"MWh produced (until {fit_expiry}), PLUS (2) sale of the same energy on the wholesale market at zonal "
             f"hourly spot price. Total = FiT × production + Σ(production_h × spot_h). "
             f"FiT portion: €{fit_revenue_eur/1_000_000:.2f} M (locked). Spot sale portion: €{spot_revenue_eur/1_000_000:.2f} M (variable)."
             if is_fit_locked else
-            "Total euros earned over the last 12 months. "
-            "Computed by summing, for each hour : production_MWh × spot_price_EUR_per_MWh. "
-            "Captures actual market conditions hour by hour, including negative spot prices and the regulatory floor at 0 €/MWh in Italy."
+            f"Total earned over the last 12 months. "
+            f"Computed by summing, for each hour : production_MWh × spot_price ({_currency}/MWh). "
+            "Captures actual market conditions hour by hour."
         ),
     )
     r2.metric(
         "Effective price (T12M)" + (" — FiT+spot" if is_fit_locked else ""),
-        f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
+        format_price(revenue_metrics["effective_price_eur_mwh"], _currency),
         help=(
             f"FiT strike + production-weighted realised spot. = Total revenue / total production_MWh. "
             f"Breakdown: €{fit_price:.0f}/MWh fixed FiT incentive (paid by State, until {fit_expiry}) "
@@ -1985,9 +2096,9 @@ if revenue_metrics:
     else:
         r3.metric(
             "Day-ahead avg (T12M)",
-            f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
+            format_price(revenue_metrics["avg_dayahead_price_eur_mwh"], _currency),
             help=(
-                "Simple arithmetic mean of all 8 760 hourly day-ahead market prices on the asset's bidding zone. "
+                f"Simple arithmetic mean of all hourly day-ahead market prices on the asset's bidding zone, in {_currency}/MWh. "
                 "Reference market level — what the typical hour was priced at on average. "
                 "An asset would earn this much per MWh ONLY if it produced flat across all hours. "
                 "Solar parks earn less because their generation is concentrated in low-price hours."

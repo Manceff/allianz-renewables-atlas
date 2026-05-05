@@ -62,6 +62,11 @@ def get_zone(country: str, park_id: str | None = None) -> str | None:
     return COUNTRY_TO_ZONE.get(country)
 
 
+def get_us_zone(park_id: str) -> str | None:
+    """Return the US RTO zone code (US-CAISO, US-ERCOT) for a park, or None."""
+    return PARK_FALLBACK_ZONE.get(park_id)
+
+
 def get_fallback_price(park_id: str) -> float | None:
     """Return a flat €/MWh constant for parks not covered by the hourly API."""
     fallback_zone = PARK_FALLBACK_ZONE.get(park_id)
