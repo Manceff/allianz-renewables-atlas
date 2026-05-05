@@ -305,25 +305,34 @@ def _build_satellite_html(
       const isFocused = (i === focusedIdx);
       const isOverridden = !!s.is_overridden;
       const isVerified = !!s.is_verified_built;
-      // Priority: focused (lime) > verified built (lime green outline) > overridden (blue) > default (cream)
+      const isEsbEnergised = !!s.is_esb_energised;
+      // Priority: focused (lime) > ESB energised (lime, official) > verified visual (lime) > overridden (blue) > default (cream)
       let baseColor = '#e8e4d6';
-      if (isVerified) baseColor = '#84cc16';
       if (isOverridden) baseColor = '#7dd3fc';
+      if (isVerified) baseColor = '#84cc16';
+      if (isEsbEnergised) baseColor = '#84cc16';
       if (isFocused) baseColor = '#84cc16';
       const marker = L.circleMarker([s.lat, s.lon], {{
-        radius: isFocused ? 9 : (isVerified ? 7 : 5),
+        radius: isFocused ? 9 : (isEsbEnergised || isVerified ? 7 : 5),
         color: baseColor,
-        weight: isFocused ? 2.5 : (isVerified ? 2 : 1.5),
+        weight: isFocused ? 2.5 : (isEsbEnergised || isVerified ? 2 : 1.5),
         fillColor: baseColor,
-        fillOpacity: isFocused ? 0.95 : (isVerified ? 0.95 : 0.9),
+        fillOpacity: isFocused ? 0.95 : (isEsbEnergised || isVerified ? 0.95 : 0.9),
       }}).addTo(map);
       let tags = '';
       if (isOverridden) tags += '<span style="color:#7dd3fc; font-size:10px; margin-left:6px;">[corrected]</span>';
-      if (isVerified) tags += '<span style="color:#84cc16; font-size:10px; margin-left:6px; font-weight:600;">✅ BUILT</span>';
+      if (isEsbEnergised) {{
+        const dateLabel = s.esb_connect_date ? ' since ' + s.esb_connect_date : '';
+        tags += '<span style="color:#84cc16; font-size:10px; margin-left:6px; font-weight:600;">⚡ ENERGISED' + dateLabel + '</span>';
+      }} else if (isVerified) {{
+        tags += '<span style="color:#84cc16; font-size:10px; margin-left:6px; font-weight:600;">✅ BUILT</span>';
+      }}
+      const offerLine = s.offer_type ? '<div style="color: #fbbf24; font-size: 10px; margin-top: 2px;">⚠ ' + s.offer_type + ' (non-firm, curtailment risk)</div>' : '';
       marker.bindPopup(
-        '<div style="font-family: Geist, sans-serif; font-size: 12px; min-width: 180px;">' +
+        '<div style="font-family: Geist, sans-serif; font-size: 12px; min-width: 200px;">' +
         '<div style="font-weight: 600; color: #f1f5f9; margin-bottom: 3px;">' + s.name + tags + '</div>' +
         '<div style="color: #94a3b8; font-size: 11px;">Co. ' + s.county + ' · ' + s.capacity_mw.toFixed(1) + ' MW</div>' +
+        offerLine +
         '<div style="color: #7a7464; font-size: 10px; margin-top: 4px;">' + s.lat.toFixed(4) + ', ' + s.lon.toFixed(4) + '</div>' +
         '</div>'
       );
@@ -523,8 +532,9 @@ if _is_forward_sale:
 
     # Forward-sale context banner
     n_subs = len(_park_model_for_status.sub_sites or [])
-    n_connected = sum(1 for s in (_park_model_for_status.sub_sites or []) if s.seai_status == "Connected")
-    n_contracted = n_subs - n_connected
+    n_energised = sum(1 for s in (_park_model_for_status.sub_sites or []) if s.esb_status == "Energised")
+    n_contracted = n_subs - n_energised
+    mw_energised = sum(s.capacity_mw for s in (_park_model_for_status.sub_sites or []) if s.esb_status == "Energised")
     st.markdown(
         f"""
         <div style="
@@ -535,15 +545,20 @@ if _is_forward_sale:
           font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
           color: #cbd5e1; line-height: 1.55;">
           <div style="font-weight: 600; color: #7dd3fc; margin-bottom: 6px; letter-spacing: 0.04em;">
-            ▸ FORWARD-SALE PORTFOLIO — NOT YET PRODUCING
+            ▸ FORWARD-SALE PORTFOLIO — PARTIAL ENERGIZATION IN PROGRESS
           </div>
           Allianz acquired this {n_subs}-site portfolio in <b>December 2023</b> as a forward sale :
-          permits + EirGrid grid-connection rights + RESS-2/3 state-secured revenue contracts —
-          <b>not operating panels</b>. As of latest SEAI Solar Atlas snapshot,
-          <b>{n_connected} of {n_subs} sites are grid-connected</b> ({n_contracted} contracted only).
-          Live / T12M / backtest sections are skipped — the metrics below are <b>theoretical</b>,
-          assuming full energization across all sites at their actual locations,
-          using pvlib hourly weather (Open-Meteo Archive) at each site's GPS coords.
+          permits + EirGrid grid-connection rights + RESS-2/3 state-secured revenue contracts.
+          Per <b>ESB Networks DSO Q4 2025 report</b> (information correct 01/01/2026),
+          <b>{n_energised} of {n_subs} sites are physically grid-connected</b>
+          ({mw_energised:.1f} MWac active), {n_contracted} sites still contracted.
+          <br><br>
+          <span style="color: #fbbf24;">⚠️ Curtailment risk :</span> the energised sites operate under
+          <b>Non GPA / ECP-2.1</b> (non-firm) access — EirGrid may reduce output without compensation
+          during grid congestion until network reinforcements ~2029-2030.
+          <br><br>
+          Live / T12M / backtest sections skipped (incomplete production history). Metrics below are
+          <b>pvlib-projected</b> at each site's own GPS coords using site-specific Open-Meteo Archive weather.
         </div>
         """,
         unsafe_allow_html=True,
@@ -657,10 +672,24 @@ if _is_forward_sale:
     else:
         pm4.metric("Projected annual revenue", "—", help="No RESS strike price configured.")
 
-    # Currently-confirmed-built subset (visually verified by user via satellite)
-    if verified_count > 0:
-        verified_revenue_meur = (
-            verified_mwh * (_park_model_for_status.ress_strike_price_eur_mwh or 0) / 1_000_000.0
+    # Currently-producing subset = ESB Energised OR user verified-built (whichever flag is set)
+    energised_count = 0
+    energised_mw_ac = 0.0
+    energised_mwh = 0.0
+    energised_dates = []
+    for s, calc in zip(_park_model_for_status.sub_sites or [], portfolio["per_site"]):
+        if s.esb_status == "Energised" or _verified_for_park.get(s.name):
+            energised_count += 1
+            energised_mw_ac += s.capacity_mw
+            energised_mwh += calc["annual_mwh"]
+            if s.esb_connect_date:
+                energised_dates.append(s.esb_connect_date)
+    if energised_count > 0:
+        energised_revenue_meur = (
+            energised_mwh * (_park_model_for_status.ress_strike_price_eur_mwh or 0) / 1_000_000.0
+        )
+        date_range = (
+            f"earliest connection {min(energised_dates)}" if energised_dates else "ESB-confirmed"
         )
         st.markdown(
             f"""
@@ -670,13 +699,16 @@ if _is_forward_sale:
               border-radius: 4px;
               font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
               color: #cbd5e1; letter-spacing: 0.02em;">
-              <span style="color: #84cc16; font-weight: 600;">▸ CURRENTLY CONFIRMED BUILT (visual verification)</span>
+              <span style="color: #84cc16; font-weight: 600;">▸ CURRENTLY PRODUCING (ESB Networks Q4 2025 confirmed)</span>
               &nbsp;&nbsp;
-              <b style="color:#f1f5f9;">{verified_count}/{len(_park_model_for_status.sub_sites or [])} sites</b>
-              &nbsp;·&nbsp; {verified_mw_ac:.1f} MW (AC)
-              &nbsp;·&nbsp; <b style="color:#f1f5f9;">{verified_mwh:,.0f} MWh/yr</b>
-              &nbsp;·&nbsp; € {verified_revenue_meur:.2f} M revenue/yr
-              &nbsp;&nbsp;<span style="color:#7a7464;">— remaining {annual_mwh - verified_mwh:,.0f} MWh from {len(_park_model_for_status.sub_sites or [])-verified_count} contracted sites pending energization.</span>
+              <b style="color:#f1f5f9;">{energised_count}/{len(_park_model_for_status.sub_sites or [])} sites</b>
+              &nbsp;·&nbsp; {energised_mw_ac:.1f} MW (AC)
+              &nbsp;·&nbsp; <b style="color:#f1f5f9;">{energised_mwh:,.0f} MWh/yr</b> (pvlib projection)
+              &nbsp;·&nbsp; € {energised_revenue_meur:.2f} M revenue/yr
+              <div style="margin-top:4px; color:#7a7464; font-size:0.72rem;">
+                {date_range} · all on Non-GPA / ECP-2.1 (non-firm, curtailment risk).
+                Remaining {annual_mwh - energised_mwh:,.0f} MWh from {len(_park_model_for_status.sub_sites or [])-energised_count} sites pending construction completion.
+              </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -716,19 +748,28 @@ if _is_forward_sale:
     import pandas as pd_ps
     rows = []
     for s, calc in zip(_park_model_for_status.sub_sites or [], portfolio["per_site"]):
-        is_verified = bool(_verified_for_park.get(s.name))
+        is_energised = s.esb_status == "Energised"
+        is_verified_user = bool(_verified_for_park.get(s.name))
+        # ESB authoritative wins; user verified is a fallback indicator
+        if is_energised:
+            built_marker = "⚡"
+        elif is_verified_user:
+            built_marker = "✅"
+        else:
+            built_marker = "—"
         rows.append({
-            "Built?": "✅" if is_verified else "—",
+            "Built?": built_marker,
             "Site (commune)": s.name,
             "EirGrid name": s.eirgrid_name or "—",
             "EirGrid code": s.eirgrid_code or "—",
             "Co.": s.county,
             "MW (AC)": s.capacity_mw,
-            "MW (DC)": calc["capacity_mwp_dc"],
             "Annual MWh (pvlib)": int(calc["annual_mwh"]),
             "CF %": round(calc["capacity_factor_pct"], 1),
-            "Status (SEAI)": s.seai_status or "—",
-            "Firm access (EirGrid)": s.firm_access or "—",
+            "ESB status": s.esb_status or "—",
+            "Connected": s.esb_connect_date or "—",
+            "Offer type": s.offer_type or "—",
+            "Firm access": s.firm_access or "—",
         })
     df_subs = pd_ps.DataFrame(rows)
     st.dataframe(df_subs, use_container_width=True, hide_index=True)
@@ -777,6 +818,9 @@ if _is_forward_sale:
             "original_lat": s.lat,
             "original_lon": s.lon,
             "is_verified_built": bool(_verified_for_park.get(s.name)),
+            "is_esb_energised": s.esb_status == "Energised",
+            "esb_connect_date": s.esb_connect_date or "",
+            "offer_type": s.offer_type or "",
         })
 
     _focus_key_fs = f"sat-focus-{selected_park_id}"
@@ -935,6 +979,26 @@ DATA_YEAR_LABEL = f"{T12M_START.isoformat()} → {T12M_END.isoformat()}"
 # ---------------------------------------------------------------------------
 # Park header
 # ---------------------------------------------------------------------------
+
+# Divested banner (e.g. Brindisi) — render before the header
+if _park_model_for_status and _park_model_for_status.divested:
+    st.markdown(
+        f"""
+        <div style="
+          margin: 14px 0 10px; padding: 12px 16px;
+          background: rgba(220, 38, 38, 0.08);
+          border-left: 4px solid #dc2626;
+          border-radius: 6px;
+          font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+          color: #fecaca; line-height: 1.5;">
+          <span style="color: #f87171; font-weight: 600; letter-spacing: 0.04em;">▸ DIVESTED ASSET — HISTORICAL TRACEABILITY ONLY</span>
+          <div style="margin-top: 4px; color: #cbd5e1;">
+            {_park_model_for_status.divestment_note or "Allianz no longer owns this asset."}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 st.markdown(
     f"""

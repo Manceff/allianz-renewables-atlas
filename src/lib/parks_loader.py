@@ -52,8 +52,11 @@ class SubSite(BaseModel):
     eirgrid_code: str | None = Field(default=None, description="EirGrid project code (DG1xxx / TGxxx)")
     eirgrid_name: str | None = Field(default=None, description="Canonical EirGrid project name")
     station: str | None = Field(default=None, description="Grid connection station")
-    seai_status: str | None = Field(default=None, description="Connected | Contracted | None (per SEAI Solar Atlas)")
-    firm_access: str | None = Field(default=None, description="EirGrid Firm Access date (e.g. 'in 2024', 'from 2028')")
+    seai_status: str | None = Field(default=None, description="Connected | Contracted (per SEAI Solar Atlas, may lag reality)")
+    firm_access: str | None = Field(default=None, description="EirGrid Firm Access date (admin, ≠ energization)")
+    esb_status: str | None = Field(default=None, description="Energised | Contracted (per ESB Networks DSO report — authoritative)")
+    esb_connect_date: str | None = Field(default=None, description="ISO date YYYY-MM-DD of grid energization, per ESB DSO report")
+    offer_type: str | None = Field(default=None, description="Non GPA | ECP-2.1 | etc. — non-firm = curtailment risk")
     note: str | None = None
 
 
@@ -83,6 +86,14 @@ class ParkModel(BaseModel):
         default=None,
         description="'forward_sale' (Allianz bought permits / RESS contracts pre-build, no production yet), "
                     "'operating' (panels generating), or None (single-site or not specified).",
+    )
+    divested: bool = Field(
+        default=False,
+        description="True if Allianz no longer owns this asset. Kept in the index for historical traceability.",
+    )
+    divestment_note: str | None = Field(
+        default=None,
+        description="Free-text describing the divestment: date if known, buyer, or 'date unknown'.",
     )
     dc_ac_ratio: float = Field(default=1.30, ge=1.0, le=2.0)
     ress_strike_price_eur_mwh: float | None = Field(

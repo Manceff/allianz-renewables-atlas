@@ -31,11 +31,13 @@ parks:
     coordinates: [40.6383, 17.9350]  # Brindisi / Mesagne, Pouilles
     capacity_mwp: 7.2
     commissioning_year: 2010
-    operator: "Elements Green (développeur initial)"
+    operator: "Bluefield Revive Italia I Srl (depuis jan 2024)"
     allianz_stake_pct: 100
     acquisition_year: 2010
-    press_release_url: "https://www.bluefield.eu/news/bluefield-revive-italia-acquires-acp-italian-portfolio"
-    notes: "Premier investissement solaire ACP S1 2010. Portefeuille de 10 petites centrales <1 MWp construites 2009-2010 sous Conto Energia (autorisation simplifiée DIA). Vendu en 2023 à Bluefield Revive Italia I Srl. Conservé pour traçabilité historique."
+    press_release_url: "https://elementsgreen.com/news/elements-green-successfully-completes-sale-of-italian-solar-portfolio-to-bluefield/"
+    notes: "Premier investissement solaire ACP S1 2010 sous Conto Energia. ACP a exit à une date INCONNUE pré-2024 ; Elements Green détenait l'asset 2009-2024 ; Bluefield Revive Italia I Srl l'a racheté à Elements Green en jan 2024 (~€30M, ratio ≈4.16M€/MW reflet du tarif d'achat italien lucratif). Possible structure pre-exit : ACP Limited Partner via holding allemande, Elements Green General Partner. Conservé pour traçabilité historique."
+    divested: true
+    divestment_note: "ACP exit date unknown pre-2024. Asset bought from Elements Green by Bluefield Revive Italia in Jan 2024 — Allianz was NOT the seller in that transaction."
     has_pvgis_estimate: true
     has_reported_production: false
 
@@ -65,7 +67,7 @@ parks:
     allianz_stake_pct: 100
     acquisition_year: 2013
     press_release_url: "https://www.infrappp.com/news/allianz-acquires-italian-photovoltaic-plant"
-    notes: "Acquis via le premier fonds AREF I entre fin 2012 et mi-2013. Foggia, Pouilles. Acquisition emblématique du modèle ACP : risque réglementaire italien (décret Spalma-Incentivi) intégré dans la valorisation. ~12 280 MWh/an, alimente 3 000 foyers."
+    notes: "Acquis via le premier fonds AREF I entre fin 2012 et mi-2013. Foggia, Pouilles. Acquisition emblématique du modèle ACP : risque réglementaire italien (décret Spalma-Incentivi) intégré dans la valorisation. ~12 280 MWh/an, alimente 3 000 foyers. INCOHÉRENCE DATA : InfraPPP indique 8 MWp / acquisition 2013 ; GEM Wiki indique 10.6 MWac / COD 2017 — possible extension/repowering Phase 2 entre 2013-2017 (un ratio DC/AC < 1 est physiquement impossible). À vérifier via GSE Atlaimpianti."
     has_pvgis_estimate: true
     has_reported_production: true
 
@@ -163,7 +165,7 @@ parks:
     allianz_stake_pct: 100
     acquisition_year: 2023
     press_release_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
-    notes: "Composante principale du portefeuille Grenergy 297 MW (270.6 M€). Andalousie sud, irradiation excellente. Grenergy conserve les early revenues jusqu'à closing financier juin 2025 + responsabilité O&M long-term. COD H2 2024."
+    notes: "Composante principale du portefeuille Grenergy 297 MW. Andalousie sud, irradiation excellente. COD H2 2024. Closing transaction Allianz <-> Grenergy le 3 nov 2025 (delayed from H1 2025). Prix final €273M (vs €270.6M initial). Grenergy a réalisé €75M plus-value, conserve O&M long-term. Confirmé par El Economista 11 nov 2025."
     has_pvgis_estimate: true
     has_reported_production: true
 
@@ -178,7 +180,7 @@ parks:
     allianz_stake_pct: 100
     acquisition_year: 2023
     press_release_url: "https://grenergy.eu/wp-content/uploads/2025/01/ndp-grenergy-sells-to-allianz-300mw-solar-in-spain-v2-1-1.pdf"
-    notes: "Actif satellite du portefeuille Grenergy. Castille-La Manche centre. A bénéficié d'une ligne de financement vert dédiée 175 M€ avant intégration Allianz."
+    notes: "Actif satellite du portefeuille Grenergy 297 MW. Castille-La Manche centre. Closing 3 nov 2025 (mêmes conditions que Tabernas, package commun €273M). Bénéficié d'une ligne de financement vert €175M (annoncée 14 mars 2024, syndicat Banco Santander/MUFG/Natixis). Grenergy O&M long-term."
     has_pvgis_estimate: true
     has_reported_production: true
 
@@ -216,6 +218,7 @@ parks:
         eirgrid_name: "Taghadoe Solar Farm"
         station: "Griffinrath"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "4.5 MW in 2024, 25 MW from 2028"
       - name: "Marlinstown"
         county: "Westmeath"
@@ -226,7 +229,9 @@ parks:
         eirgrid_name: "Marlinstown Solar Farm (prev Russellstown)"
         station: "Mullingar"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "from 2029"
+        note: "Site name = Russellstown townland (Elgin renamed Marlinstown). Distinct from 5 MW Mullingar community-owned 'Marlinstown' landfill project (non-Allianz)."
       - name: "Monread"
         county: "Kildare"
         capacity_mw: 4.0
@@ -236,7 +241,11 @@ parks:
         eirgrid_name: "Kerdiffstown PV"
         station: "Monread"
         seai_status: "Contracted"
+        esb_status: "Energised"
+        esb_connect_date: "2025-06-25"
+        offer_type: "Non GPA"
         firm_access: "from 2028"
+        note: "Energised 25 Jun 2025 per ESB Networks DSO Q4 2025 report (10 kV, Non GPA = non-firm). Distinct from BNRG Renewables 7 MW Kerdiffstown solar."
       - name: "Glenamaddy"
         county: "Galway"
         capacity_mw: 4.0
@@ -246,6 +255,7 @@ parks:
         eirgrid_name: "Shannagh Beg Solar Farm"
         station: "Athlone"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "from 2029"
         note: "Likely RESS-3 winner 'Galway' (per Elgin LinkedIn Aug 2023)"
       - name: "Talbots Inch"
@@ -257,6 +267,7 @@ parks:
         eirgrid_name: "Keatingstown Solar Farm"
         station: "Kilkenny"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "from 2030"
       - name: "Ballynilard"
         county: "Tipperary"
@@ -267,6 +278,7 @@ parks:
         eirgrid_name: "Ballinalard Solar Farm"
         station: "Tipperary"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "in 2024"
       - name: "Ballyragget"
         county: "Kilkenny"
@@ -277,6 +289,7 @@ parks:
         eirgrid_name: "Parksgrove Solar Farm"
         station: "Ballyragget"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "from 2030"
       - name: "Athboy"
         county: "Meath"
@@ -287,6 +300,7 @@ parks:
         eirgrid_name: "Martinstown Solar (formerly Crowinstown)"
         station: null
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: null
         note: "Not in EirGrid Firm Access 2024 list — likely the candidate NOT in the 16-site Allianz portfolio (1 of 17 odd-one-out)."
       - name: "Tullynally"
@@ -298,6 +312,7 @@ parks:
         eirgrid_name: "Tullynally Estate"
         station: "Mullingar"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "from 2029"
       - name: "Finnea"
         county: "Cavan"
@@ -308,6 +323,7 @@ parks:
         eirgrid_name: "Carrickabane Solar Farm"
         station: "Shankill"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "in 2024"
       - name: "Edgeworthstown"
         county: "Longford"
@@ -318,7 +334,11 @@ parks:
         eirgrid_name: "Lisnageeragh Solar Farm"
         station: "Richmond"
         seai_status: "Contracted"
+        esb_status: "Energised"
+        esb_connect_date: "2025-04-11"
+        offer_type: "Non GPA"
         firm_access: "from 2029"
+        note: "First Elgin/Allianz Irish site to be energised (11 Apr 2025, 20 kV, Non GPA = non-firm = curtailment risk until ~2029). Different from older EEPV2 Lisnageeragh solar farm (2017 vintage, non-Allianz)."
       - name: "Kilmacthomas"
         county: "Waterford"
         capacity_mw: 4.0
@@ -328,7 +348,11 @@ parks:
         eirgrid_name: "Cooltubbrid West Solar Farm"
         station: "Dungarvan"
         seai_status: "Contracted"
+        esb_status: "Energised"
+        esb_connect_date: "2025-06-30"
+        offer_type: "ECP-2.1"
         firm_access: "in 2024"
+        note: "Energised 30 Jun 2025 per ESB Networks DSO Q4 2025 (20 kV, ECP-2.1 transitional non-firm). One of the 3 sites Elgin announced commencing construction Jun 2024."
       - name: "Castlerea"
         county: "Roscommon"
         capacity_mw: 4.0
@@ -338,6 +362,7 @@ parks:
         eirgrid_name: "Rathleg Solar Farm"
         station: "Carrick on Shannon"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "in 2024"
       - name: "Tullamore"
         county: "Offaly"
@@ -348,6 +373,7 @@ parks:
         eirgrid_name: "Muiniagh Solar Farm"
         station: "Thornsberry"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "from 2029"
       - name: "Portarlington"
         county: "Offaly"
@@ -358,6 +384,7 @@ parks:
         eirgrid_name: "Shanderry Solar Farm"
         station: "Portlaoise"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "from 2029"
       - name: "Bagenalstown"
         county: "Carlow"
@@ -368,6 +395,7 @@ parks:
         eirgrid_name: "Kilcarrig Solar PV Farm"
         station: "Carlow"
         seai_status: "Contracted"
+        esb_status: "Contracted"
         firm_access: "from 2030"
         note: "Likely RESS-3 winner 'Carlow' (per Elgin LinkedIn Aug 2023)"
       - name: "Liss"
@@ -379,7 +407,11 @@ parks:
         eirgrid_name: "Liss Solar Farm (prev Lands at Liss)"
         station: "Mullingar"
         seai_status: "Contracted"
+        esb_status: "Energised"
+        esb_connect_date: "2025-06-19"
+        offer_type: "Non GPA"
         firm_access: "from 2029"
+        note: "Located at Oldcastle, Meath (not 'Liss' commune). Energised 19 Jun 2025 per ESB Networks DSO Q4 2025 (20 kV, Non GPA = non-firm)."
     sub_sites_caption: "17 sites cross-referenced against EirGrid Firm Access 2024 Review (canonical project codes + connection dates) and SEAI Solar Atlas (precise GPS coords + connection status). All 17 are <b>Contracted</b> per SEAI — i.e. the panels are not yet generating; firm access is staggered 2024-2030. Athboy is the most likely candidate NOT in the 16-site Allianz portfolio (no EirGrid code)."
     has_pvgis_estimate: true
     has_reported_production: false
