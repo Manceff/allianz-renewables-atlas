@@ -1283,13 +1283,20 @@ _night_caption_extra = (
     if _is_night_at_park else ""
 )
 
+_time_badge_color = "#fbbf24" if _is_night_at_park else "#84cc16"
+_time_badge_html = (
+    f'<span style="display:inline-block; margin-left:14px; padding:4px 12px; '
+    f'background:rgba(132,204,22,0.12); border:1px solid {_time_badge_color}55; '
+    f'border-radius:6px; font-family:\'JetBrains Mono\', monospace; font-size:0.95rem; '
+    f'font-weight:600; color:{_time_badge_color}; letter-spacing:0.04em;">'
+    f'🕒 {_park_local_hour_label} local at park</span>'
+)
 st.markdown(
     f"""
     <div class="section-header section-first section-live">
-      <span class="section-label">Live · right now</span>
+      <span class="section-label">Live · right now</span>{_time_badge_html}
       <span class="section-caption">
-        Live snapshot at the park's local time ({_park_local_hour_label}) · weather refreshed every 15 min (Open-Meteo) ·
-        spot price from ENTSO-E day-ahead.{_night_caption_extra}
+        Weather refreshed every 15 min (Open-Meteo) · spot price from ENTSO-E day-ahead.{_night_caption_extra}
       </span>
     </div>
     """,
@@ -2014,111 +2021,6 @@ else:
 
 st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Daily output chart — single fluid line, dated year DATA_YEAR
-# ---------------------------------------------------------------------------
-
-# ----- Daily production + daily revenue, full T12M window -----
-st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
-
-daily_kwh_t12m = hourly_to_daily(hourly_data["hourly_production_kwh"])
-daily_mwh_t12m = [v / 1000.0 for v in daily_kwh_t12m]
-day_dates_t12m = pd.date_range(T12M_START.isoformat(), periods=len(daily_mwh_t12m), freq="D")
-
-# Daily revenue : per-hour production × per-hour price aggregated to days
-daily_rev_eur: list[float | None] = []
-if revenue_metrics and (period_prices and period_prices.get("prices_eur_mwh") or fallback_price is not None):
-    if period_prices and period_prices.get("prices_eur_mwh"):
-        hp_raw = period_prices["prices_eur_mwh"]
-        # Pad/truncate to match production length (handles partial zone coverage e.g. IT-North)
-        hk_len = len(hourly_data["hourly_production_kwh"])
-        if len(hp_raw) < hk_len:
-            hp = list(hp_raw) + [None] * (hk_len - len(hp_raw))
-        else:
-            hp = list(hp_raw[:hk_len])
-    else:
-        hp = [fallback_price or 0.0] * len(hourly_data["hourly_production_kwh"])
-    hk = hourly_data["hourly_production_kwh"]
-    # For FiT-locked parks, daily revenue includes both FiT (constant) AND spot
-    for d in range(len(daily_mwh_t12m)):
-        i0 = d * 24
-        i1 = min(i0 + 24, len(hk))
-        day_kwh = sum(hk[i] for i in range(i0, i1))
-        day_spot = sum(
-            (hk[i] / 1000.0) * (hp[i] if hp[i] is not None else 0.0)
-            for i in range(i0, i1)
-        )
-        day_fit = (day_kwh / 1000.0) * fit_price if is_fit_locked else 0.0
-        daily_rev_eur.append(day_spot + day_fit)
-
-# When only a flat fallback price is available, the revenue line is just
-# the production line × constant — colinear and visually misleading.
-# Suppress it in that case and keep production-only.
-_is_flat_fallback = bool(daily_rev_eur and (not period_prices or not period_prices.get("prices_eur_mwh")) and fallback_price is not None)
-_show_revenue_line = bool(daily_rev_eur) and not _is_flat_fallback
-_ts_title = (
-    f"Daily production · T12M (revenue proxy at {fallback_price:.0f} €/MWh — line omitted, redundant with production)"
-    if _is_flat_fallback else
-    f"Daily production & revenue · T12M ({T12M_START.isoformat()} → {T12M_END.isoformat()})"
-)
-
-fig_ts = go.Figure()
-fig_ts.add_trace(go.Scatter(
-    x=day_dates_t12m,
-    y=daily_mwh_t12m,
-    name="Daily production",
-    mode="lines",
-    line=dict(color="#e8e4d6", width=1.6, shape="spline", smoothing=0.3),
-    fill="tozeroy",
-    fillcolor="rgba(232, 228, 214, 0.08)",
-    hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
-    yaxis="y",
-))
-if _show_revenue_line:
-    fig_ts.add_trace(go.Scatter(
-        x=day_dates_t12m,
-        y=[r / 1000.0 for r in daily_rev_eur],
-        name="Daily revenue",
-        mode="lines",
-        line=dict(color="rgba(125, 211, 252, 0.85)", width=1.4, shape="spline", smoothing=0.3),
-        hovertemplate="%{x|%d %b %Y} · € %{y:,.1f} k<extra></extra>",
-        yaxis="y2",
-    ))
-fig_ts.update_layout(
-    title=dict(
-        text=_ts_title,
-        font=dict(color="#f1f5f9", size=13, family="Geist", weight=500),
-        x=0.0, xanchor="left", pad=dict(b=8),
-    ),
-    height=260,
-    margin=dict(l=0, r=0, t=44, b=10),
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    xaxis=dict(showgrid=False, tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"), tickformat="%b %y", dtick="M1"),
-    yaxis=dict(
-        gridcolor="rgba(148, 163, 184, 0.06)",
-        tickfont=dict(color="#cbd5e1", size=10, family="JetBrains Mono"),
-        ticksuffix=" MWh",
-        title=None,
-    ),
-    yaxis2=dict(
-        overlaying="y", side="right", showgrid=False,
-        tickfont=dict(color="rgba(125, 211, 252, 0.95)", size=10, family="JetBrains Mono"),
-        ticksuffix=" k€",
-        title=None,
-    ),
-    legend=dict(
-        orientation="h", x=0, y=1.18, xanchor="left", yanchor="top",
-        font=dict(color="#94a3b8", size=10, family="JetBrains Mono"),
-        bgcolor="rgba(0,0,0,0)",
-    ),
-    hoverlabel=dict(
-        bgcolor="rgba(13, 19, 32, 0.95)",
-        bordercolor="rgba(232, 228, 214, 0.4)",
-        font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
-    ),
-)
-st.plotly_chart(fig_ts, width="stretch", config={"displayModeBar": False})
 # ---------------------------------------------------------------------------
 # About this data
 # ---------------------------------------------------------------------------
