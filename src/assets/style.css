@@ -373,16 +373,16 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
 }
 
 .atlas-disclaimer {
-  margin: 10px auto 0 !important;
-  max-width: 520px;
+  margin: 8px auto 0 !important;
+  max-width: 480px;
   width: 100%;
-  font-size: 0.62rem;
+  font-size: 0.54rem;
   font-style: italic;
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.45;
   letter-spacing: 0.005em;
   color: var(--text-muted);
-  opacity: 0.6;
+  opacity: 0.5;
   text-wrap: balance;
   text-align: center !important;
 }
