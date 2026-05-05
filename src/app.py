@@ -977,6 +977,49 @@ hourly_data = {
 DATA_YEAR_LABEL = f"{T12M_START.isoformat()} → {T12M_END.isoformat()}"
 
 # ---------------------------------------------------------------------------
+# Detail panel — common computations needed by Revenue, Historical, etc.
+# ---------------------------------------------------------------------------
+
+# T12M annual aggregate
+annual_kwh = sum(hourly_data["hourly_production_kwh"])
+annual_mwh = annual_kwh / 1000.0
+cf_annual = capacity_factor_annual(
+    hourly_data["hourly_production_kwh"], peakpower_mw=selected_row["capacity_mwp"]
+)
+monthly = monthly_aggregates_from_timestamps(
+    hourly_data["hourly_production_kwh"], hourly_data["timestamps"]
+)
+
+# Yesterday's output (J-1 — last full day in T12M data)
+import datetime as _dtmod2
+_yest = T12M_END  # last day in our data window
+_yest_idx_start = (T12M_DAYS - 1) * 24
+_yest_idx_end = T12M_DAYS * 24
+yesterday_kwh = sum(hourly_data["hourly_production_kwh"][_yest_idx_start:_yest_idx_end])
+yesterday_mwh = yesterday_kwh / 1000.0
+
+# Same calendar day 1 year before (from T12M_START_PREV window)
+yest_prev_mwh = None
+if period_data_prev:
+    prev_idx_start = (T12M_DAYS - 1) * 24
+    prev_idx_end = T12M_DAYS * 24
+    yest_prev_kwh = sum(period_data_prev["hourly_production_kwh"][prev_idx_start:prev_idx_end])
+    yest_prev_mwh = yest_prev_kwh / 1000.0
+
+reported = reported_map.get(selected_park_id)
+delta_pct = None
+delta_severity = "none"
+if reported:
+    rep_mwh = float(reported["annual_mwh"])
+    delta_pct = (annual_mwh - rep_mwh) / rep_mwh * 100.0
+    if abs(delta_pct) < 5:
+        delta_severity = "green"
+    elif abs(delta_pct) < 10:
+        delta_severity = "yellow"
+    else:
+        delta_severity = "red"
+
+# ---------------------------------------------------------------------------
 # Park header
 # ---------------------------------------------------------------------------
 
@@ -1033,6 +1076,139 @@ st.markdown(
 
 # ---------------------------------------------------------------------------
 # Satellite view
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# REVENUE · YEAR 2023 — historical production × historical prices
+# ---------------------------------------------------------------------------
+
+zone = get_zone(selected_row["country"], park_id=selected_park_id)
+fallback_price = get_fallback_price(selected_park_id)
+revenue_metrics: dict = {}
+revenue_source = ""
+period_prices: dict | None = None
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_period_prices_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
+    return fetch_period_prices(zone, start_iso, end_iso)
+
+if zone:
+    period_prices = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
+    if period_prices and period_prices.get("prices_eur_mwh"):
+        revenue_metrics = compute_revenue_metrics(
+            hourly_production_kwh=hourly_data["hourly_production_kwh"],
+            hourly_prices_eur_mwh=period_prices["prices_eur_mwh"],
+        )
+        revenue_source = f"hourly day-ahead zone {zone}"
+
+# Fallback : flat annual avg price for US/Ireland zones not on energy-charts
+if not revenue_metrics and fallback_price is not None:
+    flat_prices = [fallback_price] * len(hourly_data["hourly_production_kwh"])
+    revenue_metrics = compute_revenue_metrics(
+        hourly_production_kwh=hourly_data["hourly_production_kwh"],
+        hourly_prices_eur_mwh=flat_prices,
+    )
+    revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
+
+_revenue_caption = revenue_source or f"Zone {zone or '—'} not available — revenue cannot be computed."
+
+st.markdown(
+    f"""
+    <div class="section-header">
+      <span class="section-label">Revenue · last 12 months</span>
+      <span class="section-caption">
+        Hourly production × hourly day-ahead spot price for each of the 8&nbsp;760 hours
+        in the rolling year ({T12M_START.isoformat()} → {T12M_END.isoformat()}).
+        Source : <b>{_revenue_caption}</b>.
+      </span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+r1, r2, r3, r4 = st.columns(4)
+
+if revenue_metrics:
+    r1.metric(
+        "Total revenue (T12M)",
+        f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
+        help=(
+            "Total euros earned over the last 12 months. "
+            "Computed by summing, for each hour : production_MWh × spot_price_EUR_per_MWh. "
+            "Captures actual market conditions hour by hour, including negative spot prices and the regulatory floor at 0 €/MWh in Italy."
+        ),
+    )
+    r2.metric(
+        "Effective sale price (T12M)",
+        f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
+        help=(
+            "The price actually realised on each MWh sold, weighted by when production happened. "
+            "Formula : total_revenue / total_production_mwh. "
+            "Differs from the simple market average because the park doesn't produce evenly — it produces a lot at midday "
+            "(when prices are pushed down by solar oversupply) and nothing at night (when prices spike). "
+            "This is the asset's true revenue per MWh — what really lands on the cash flow."
+        ),
+    )
+    r3.metric(
+        "Day-ahead avg (T12M)",
+        f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
+        help=(
+            "Simple arithmetic mean of all 8 760 hourly day-ahead market prices on the asset's bidding zone. "
+            "Reference market level — what the typical hour was priced at on average. "
+            "An asset would earn this much per MWh ONLY if it produced flat across all hours. "
+            "Solar parks earn less because their generation is concentrated in low-price hours."
+        ),
+    )
+    cann = revenue_metrics["cannibalization_pct"]
+    r4.metric(
+        "Cannibalisation (T12M)",
+        f"{cann:+.1f} %",
+        help=(
+            "Difference between the effective sale price and the day-ahead average, in % of the average. "
+            "Formula : (effective − day_ahead_avg) / day_ahead_avg. "
+            "Negative = the asset earns less than the market average per MWh because solar concentrates production at midday "
+            "when oversupply pushes prices down. "
+            "Worsens with the solar penetration rate of the zone — Iberia 2026 typically sees -50 to -80% cannibalisation. "
+            "The risk #1 of merchant solar today, and the main argument for PPAs, batteries, and east/west tracking."
+        ),
+    )
+else:
+    r1.metric("Total revenue (T12M)", "—", help="No price data available for this zone over this window.")
+    r2.metric("Effective sale price (T12M)", "—")
+    r3.metric("Day-ahead avg (T12M)", "—")
+    r4.metric("Cannibalisation (T12M)", "—")
+
+# Source caption
+if reported:
+    src_url = reported.get("source_url", "")
+    src_year = reported.get("year", "—")
+    src_note = reported.get("note", "")
+    st.markdown(
+        f"""
+        <div class="source-caption">
+          <span class="src-label">Reported source</span>
+          {float(reported['annual_mwh']):,.0f} MWh · {src_year} ·
+          <a href="{src_url}" target="_blank">{src_url[:80]}{'…' if len(src_url) > 80 else ''}</a>
+          <div class="src-note">{src_note}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <div class="source-caption">
+          <span class="src-label">Reported source</span>
+          No public production figure identified for this park — delta cannot be computed.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Daily output chart — single fluid line, dated year DATA_YEAR
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -1123,6 +1299,7 @@ else:
     l3.metric("Output (live est.)", "—")
 
 spot_context = None
+_live_fallback_price = get_fallback_price(selected_park_id)
 if live_spot and live_spot.get("price_eur_mwh") is not None:
     spot_price = live_spot["price_eur_mwh"]
     spot_context = interpret_spot_price(spot_price, live_zone)
@@ -1143,6 +1320,30 @@ if live_spot and live_spot.get("price_eur_mwh") is not None:
         )
     else:
         l5.metric("Revenue/h (live est.)", "—")
+elif _live_fallback_price is not None:
+    # US parks (Galloway ERCOT, Lotus CAISO) : energy-charts ne couvre pas → flat-price proxy
+    l4.metric(
+        "Spot price (proxy)",
+        f"{_live_fallback_price:.0f} €/MWh",
+        delta="flat annual avg",
+        delta_color="off",
+        help=(
+            f"Hourly zonal data unavailable for this park (US ERCOT/CAISO not on energy-charts.info). "
+            f"Using flat annual average {_live_fallback_price:.0f} €/MWh as proxy. "
+            "Real spot fluctuates intra-day in ERCOT/CAISO — this is illustrative only."
+        ),
+    )
+    if live_weather:
+        revenue_now = estimated_mw * _live_fallback_price
+        l5.metric(
+            "Revenue/h (proxy)",
+            f"€ {revenue_now:,.0f}",
+            delta="at flat avg",
+            delta_color="off",
+            help="Live output estimate × flat annual avg price × 1 hour. Hourly zonal data unavailable.",
+        )
+    else:
+        l5.metric("Revenue/h (proxy)", "—")
 else:
     l4.metric("Spot price (live)", "—", help=f"Zone {live_zone or '—'} not available right now.")
     l5.metric("Revenue/h (live est.)", "—")
@@ -1417,49 +1618,6 @@ else:
     )
 
 # ---------------------------------------------------------------------------
-# Detail panel — fetch PVGIS and render
-# ---------------------------------------------------------------------------
-
-# T12M annual aggregate
-annual_kwh = sum(hourly_data["hourly_production_kwh"])
-annual_mwh = annual_kwh / 1000.0
-cf_annual = capacity_factor_annual(
-    hourly_data["hourly_production_kwh"], peakpower_mw=selected_row["capacity_mwp"]
-)
-monthly = monthly_aggregates_from_timestamps(
-    hourly_data["hourly_production_kwh"], hourly_data["timestamps"]
-)
-
-# Yesterday's output (J-1 — last full day in T12M data)
-import datetime as _dtmod2
-_yest = T12M_END  # last day in our data window
-_yest_idx_start = (T12M_DAYS - 1) * 24
-_yest_idx_end = T12M_DAYS * 24
-yesterday_kwh = sum(hourly_data["hourly_production_kwh"][_yest_idx_start:_yest_idx_end])
-yesterday_mwh = yesterday_kwh / 1000.0
-
-# Same calendar day 1 year before (from T12M_START_PREV window)
-yest_prev_mwh = None
-if period_data_prev:
-    prev_idx_start = (T12M_DAYS - 1) * 24
-    prev_idx_end = T12M_DAYS * 24
-    yest_prev_kwh = sum(period_data_prev["hourly_production_kwh"][prev_idx_start:prev_idx_end])
-    yest_prev_mwh = yest_prev_kwh / 1000.0
-
-reported = reported_map.get(selected_park_id)
-delta_pct = None
-delta_severity = "none"
-if reported:
-    rep_mwh = float(reported["annual_mwh"])
-    delta_pct = (annual_mwh - rep_mwh) / rep_mwh * 100.0
-    if abs(delta_pct) < 5:
-        delta_severity = "green"
-    elif abs(delta_pct) < 10:
-        delta_severity = "yellow"
-    else:
-        delta_severity = "red"
-
-# ---------------------------------------------------------------------------
 # HISTORICAL · last 12 months (T12M rolling)
 # ---------------------------------------------------------------------------
 
@@ -1537,140 +1695,144 @@ else:
     )
 
 # ---------------------------------------------------------------------------
-# REVENUE · YEAR 2023 — historical production × historical prices
+# TIME SERIES · year 2023
 # ---------------------------------------------------------------------------
-
-zone = get_zone(selected_row["country"], park_id=selected_park_id)
-fallback_price = get_fallback_price(selected_park_id)
-revenue_metrics: dict = {}
-revenue_source = ""
-period_prices: dict | None = None
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def _fetch_period_prices_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
-    return fetch_period_prices(zone, start_iso, end_iso)
-
-if zone:
-    period_prices = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
-    if period_prices and period_prices.get("prices_eur_mwh"):
-        revenue_metrics = compute_revenue_metrics(
-            hourly_production_kwh=hourly_data["hourly_production_kwh"],
-            hourly_prices_eur_mwh=period_prices["prices_eur_mwh"],
-        )
-        revenue_source = f"hourly day-ahead zone {zone}"
-
-# Fallback : flat annual avg price for US/Ireland zones not on energy-charts
-if not revenue_metrics and fallback_price is not None:
-    flat_prices = [fallback_price] * len(hourly_data["hourly_production_kwh"])
-    revenue_metrics = compute_revenue_metrics(
-        hourly_production_kwh=hourly_data["hourly_production_kwh"],
-        hourly_prices_eur_mwh=flat_prices,
-    )
-    revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
-
-_revenue_caption = revenue_source or f"Zone {zone or '—'} not available — revenue cannot be computed."
 
 st.markdown(
     f"""
     <div class="section-header">
-      <span class="section-label">Revenue · last 12 months</span>
+      <span class="section-label">Time series · last 12 months</span>
       <span class="section-caption">
-        Hourly production × hourly day-ahead spot price for each of the 8&nbsp;760 hours
-        in the rolling year ({T12M_START.isoformat()} → {T12M_END.isoformat()}).
-        Source : <b>{_revenue_caption}</b>.
+        Daily and monthly breakdowns of T12M production ({T12M_START.isoformat()} → {T12M_END.isoformat()}).
+        Reveals seasonality and the typical climatic shape of the site.
       </span>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-r1, r2, r3, r4 = st.columns(4)
+daily_kwh = hourly_to_daily(hourly_data["hourly_production_kwh"])
+daily_mwh = [v / 1000.0 for v in daily_kwh]
+day_dates = pd.date_range(T12M_START.isoformat(), periods=len(daily_mwh), freq="D")
 
-if revenue_metrics:
-    r1.metric(
-        "Total revenue (T12M)",
-        f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
-        help=(
-            "Total euros earned over the last 12 months. "
-            "Computed by summing, for each hour : production_MWh × spot_price_EUR_per_MWh. "
-            "Captures actual market conditions hour by hour, including negative spot prices and the regulatory floor at 0 €/MWh in Italy."
-        ),
-    )
-    r2.metric(
-        "Effective sale price (T12M)",
-        f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
-        help=(
-            "The price actually realised on each MWh sold, weighted by when production happened. "
-            "Formula : total_revenue / total_production_mwh. "
-            "Differs from the simple market average because the park doesn't produce evenly — it produces a lot at midday "
-            "(when prices are pushed down by solar oversupply) and nothing at night (when prices spike). "
-            "This is the asset's true revenue per MWh — what really lands on the cash flow."
-        ),
-    )
-    r3.metric(
-        "Day-ahead avg (T12M)",
-        f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
-        help=(
-            "Simple arithmetic mean of all 8 760 hourly day-ahead market prices on the asset's bidding zone. "
-            "Reference market level — what the typical hour was priced at on average. "
-            "An asset would earn this much per MWh ONLY if it produced flat across all hours. "
-            "Solar parks earn less because their generation is concentrated in low-price hours."
-        ),
-    )
-    cann = revenue_metrics["cannibalization_pct"]
-    r4.metric(
-        "Cannibalisation (T12M)",
-        f"{cann:+.1f} %",
-        help=(
-            "Difference between the effective sale price and the day-ahead average, in % of the average. "
-            "Formula : (effective − day_ahead_avg) / day_ahead_avg. "
-            "Negative = the asset earns less than the market average per MWh because solar concentrates production at midday "
-            "when oversupply pushes prices down. "
-            "Worsens with the solar penetration rate of the zone — Iberia 2026 typically sees -50 to -80% cannibalisation. "
-            "The risk #1 of merchant solar today, and the main argument for PPAs, batteries, and east/west tracking."
-        ),
-    )
-else:
-    r1.metric("Total revenue (T12M)", "—", help="No price data available for this zone over this window.")
-    r2.metric("Effective sale price (T12M)", "—")
-    r3.metric("Day-ahead avg (T12M)", "—")
-    r4.metric("Cannibalisation (T12M)", "—")
+# Light 7-day smoothing for a clean curve (replaces the dual-line previous version)
+import numpy as np
+arr = np.asarray(daily_mwh)
+window = 5
+smooth = np.convolve(arr, np.ones(window) / window, mode="same")
 
-# Source caption
+fig_daily = go.Figure()
+fig_daily.add_trace(
+    go.Scatter(
+        x=day_dates,
+        y=smooth,
+        mode="lines",
+        line=dict(color="#e8e4d6", width=2.2, shape="spline", smoothing=0.5),
+        fill="tozeroy",
+        fillcolor="rgba(232, 228, 214, 0.10)",
+        hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
+        name="Daily output",
+    )
+)
+
+fig_daily.update_layout(
+    title=dict(
+        text="Daily output · T12M",
+        font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
+        x=0.0, xanchor="left", pad=dict(b=8),
+    ),
+    height=240,
+    margin=dict(l=0, r=0, t=44, b=10),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    xaxis=dict(
+        showgrid=False,
+        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
+        tickformat="%b %Y",
+        dtick="M2",
+    ),
+    yaxis=dict(
+        gridcolor="rgba(148, 163, 184, 0.06)",
+        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
+        title=None,
+        ticksuffix=" MWh",
+    ),
+    showlegend=False,
+    hoverlabel=dict(
+        bgcolor="rgba(13, 19, 32, 0.95)",
+        bordercolor="rgba(232, 228, 214, 0.4)",
+        font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
+    ),
+)
+
+st.plotly_chart(fig_daily, width="stretch", config={"displayModeBar": False})
+
+# ---------------------------------------------------------------------------
+# Monthly bar chart
+# ---------------------------------------------------------------------------
+
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
+
+monthly_labels = [m["label"] for m in monthly]
+monthly_mwh = [m["production_mwh"] for m in monthly]
+fig_monthly = go.Figure()
+fig_monthly.add_trace(
+    go.Bar(
+        x=monthly_labels,
+        y=monthly_mwh,
+        marker=dict(
+            color="rgba(232, 228, 214, 0.78)",
+            line=dict(color="rgba(232, 228, 214, 0.95)", width=0.8),
+        ),
+        hovertemplate="%{x} · %{y:,.0f} MWh<extra></extra>",
+        name="Estimated",
+    )
+)
+
 if reported:
-    src_url = reported.get("source_url", "")
-    src_year = reported.get("year", "—")
-    src_note = reported.get("note", "")
-    st.markdown(
-        f"""
-        <div class="source-caption">
-          <span class="src-label">Reported source</span>
-          {float(reported['annual_mwh']):,.0f} MWh · {src_year} ·
-          <a href="{src_url}" target="_blank">{src_url[:80]}{'…' if len(src_url) > 80 else ''}</a>
-          <div class="src-note">{src_note}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.markdown(
-        """
-        <div class="source-caption">
-          <span class="src-label">Reported source</span>
-          No public production figure identified for this park — delta cannot be computed.
-        </div>
-        """,
-        unsafe_allow_html=True,
+    avg_monthly_reported = float(reported["annual_mwh"]) / 12.0
+    fig_monthly.add_hline(
+        y=avg_monthly_reported,
+        line_dash="dot",
+        line_color="rgba(248, 250, 252, 0.5)",
+        line_width=1.2,
+        annotation_text=f"Reported / 12 · {avg_monthly_reported:,.0f}",
+        annotation_position="top right",
+        annotation_yshift=2,
+        annotation_font=dict(color="#cbd5e1", size=10, family="JetBrains Mono"),
     )
 
-st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
+fig_monthly.update_layout(
+    title=dict(
+        text="Monthly production · T12M",
+        font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
+        x=0.0, xanchor="left", pad=dict(b=8),
+    ),
+    height=260,
+    margin=dict(l=0, r=0, t=44, b=0),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    xaxis=dict(
+        showgrid=False,
+        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
+    ),
+    yaxis=dict(
+        gridcolor="rgba(148, 163, 184, 0.06)",
+        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
+        title=None,
+    ),
+    showlegend=False,
+    hoverlabel=dict(
+        bgcolor="rgba(13, 19, 32, 0.95)",
+        bordercolor="rgba(232, 228, 214, 0.4)",
+        font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
+    ),
+)
+
+st.plotly_chart(fig_monthly, width="stretch", config={"displayModeBar": False})
 
 # ---------------------------------------------------------------------------
-# Daily output chart — single fluid line, dated year DATA_YEAR
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# BACKTEST · Recent N days vs {DATA_YEAR} same period
+# RECENT VS PRIOR YEAR · Recent N days vs {DATA_YEAR} same period
 # ---------------------------------------------------------------------------
 
 _baseline_year_for_backtest = T12M_END.year - 1
@@ -1678,7 +1840,7 @@ _baseline_year_for_backtest = T12M_END.year - 1
 st.markdown(
     f"""
     <div class="section-header">
-      <span class="section-label">Backtest · recent vs {_baseline_year_for_backtest}</span>
+      <span class="section-label">Recent vs prior year · {_baseline_year_for_backtest}</span>
       <span class="section-caption">
         Same calendar window, two different years. Recent = Open-Meteo archive (last available days,
         5-day publishing lag) priced at current spot. Baseline = pvlib reconstruction of {_baseline_year_for_backtest} priced at {_baseline_year_for_backtest} spot.
@@ -1889,143 +2051,6 @@ elif bt_recent and not bt_old:
     st.info(f"{_baseline_year_for_backtest} backtest unavailable for this zone.")
 elif not bt_recent:
     st.info("Recent backtest unavailable — Open-Meteo archive or spot prices fetch failed.")
-
-# ---------------------------------------------------------------------------
-# TIME SERIES · year 2023
-# ---------------------------------------------------------------------------
-
-st.markdown(
-    f"""
-    <div class="section-header">
-      <span class="section-label">Time series · last 12 months</span>
-      <span class="section-caption">
-        Daily and monthly breakdowns of T12M production ({T12M_START.isoformat()} → {T12M_END.isoformat()}).
-        Reveals seasonality and the typical climatic shape of the site.
-      </span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-daily_kwh = hourly_to_daily(hourly_data["hourly_production_kwh"])
-daily_mwh = [v / 1000.0 for v in daily_kwh]
-day_dates = pd.date_range(T12M_START.isoformat(), periods=len(daily_mwh), freq="D")
-
-# Light 7-day smoothing for a clean curve (replaces the dual-line previous version)
-import numpy as np
-arr = np.asarray(daily_mwh)
-window = 5
-smooth = np.convolve(arr, np.ones(window) / window, mode="same")
-
-fig_daily = go.Figure()
-fig_daily.add_trace(
-    go.Scatter(
-        x=day_dates,
-        y=smooth,
-        mode="lines",
-        line=dict(color="#e8e4d6", width=2.2, shape="spline", smoothing=0.5),
-        fill="tozeroy",
-        fillcolor="rgba(232, 228, 214, 0.10)",
-        hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
-        name="Daily output",
-    )
-)
-
-fig_daily.update_layout(
-    title=dict(
-        text="Daily output · T12M",
-        font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
-        x=0.0, xanchor="left", pad=dict(b=8),
-    ),
-    height=240,
-    margin=dict(l=0, r=0, t=44, b=10),
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    xaxis=dict(
-        showgrid=False,
-        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
-        tickformat="%b %Y",
-        dtick="M2",
-    ),
-    yaxis=dict(
-        gridcolor="rgba(148, 163, 184, 0.06)",
-        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
-        title=None,
-        ticksuffix=" MWh",
-    ),
-    showlegend=False,
-    hoverlabel=dict(
-        bgcolor="rgba(13, 19, 32, 0.95)",
-        bordercolor="rgba(232, 228, 214, 0.4)",
-        font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
-    ),
-)
-
-st.plotly_chart(fig_daily, width="stretch", config={"displayModeBar": False})
-
-# ---------------------------------------------------------------------------
-# Monthly bar chart
-# ---------------------------------------------------------------------------
-
-st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
-
-monthly_labels = [m["label"] for m in monthly]
-monthly_mwh = [m["production_mwh"] for m in monthly]
-fig_monthly = go.Figure()
-fig_monthly.add_trace(
-    go.Bar(
-        x=monthly_labels,
-        y=monthly_mwh,
-        marker=dict(
-            color="rgba(232, 228, 214, 0.78)",
-            line=dict(color="rgba(232, 228, 214, 0.95)", width=0.8),
-        ),
-        hovertemplate="%{x} · %{y:,.0f} MWh<extra></extra>",
-        name="Estimated",
-    )
-)
-
-if reported:
-    avg_monthly_reported = float(reported["annual_mwh"]) / 12.0
-    fig_monthly.add_hline(
-        y=avg_monthly_reported,
-        line_dash="dot",
-        line_color="rgba(248, 250, 252, 0.5)",
-        line_width=1.2,
-        annotation_text=f"Reported / 12 · {avg_monthly_reported:,.0f}",
-        annotation_position="top right",
-        annotation_yshift=2,
-        annotation_font=dict(color="#cbd5e1", size=10, family="JetBrains Mono"),
-    )
-
-fig_monthly.update_layout(
-    title=dict(
-        text="Monthly production · T12M",
-        font=dict(color="#f1f5f9", size=14, family="Geist", weight=500),
-        x=0.0, xanchor="left", pad=dict(b=8),
-    ),
-    height=260,
-    margin=dict(l=0, r=0, t=44, b=0),
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    xaxis=dict(
-        showgrid=False,
-        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
-    ),
-    yaxis=dict(
-        gridcolor="rgba(148, 163, 184, 0.06)",
-        tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"),
-        title=None,
-    ),
-    showlegend=False,
-    hoverlabel=dict(
-        bgcolor="rgba(13, 19, 32, 0.95)",
-        bordercolor="rgba(232, 228, 214, 0.4)",
-        font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
-    ),
-)
-
-st.plotly_chart(fig_monthly, width="stretch", config={"displayModeBar": False})
 
 # ---------------------------------------------------------------------------
 # About this data

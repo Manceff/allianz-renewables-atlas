@@ -29,7 +29,6 @@ COUNTRY_TO_ZONE: dict[str, str] = {
     "FR": "FR",                # France
     "IT": "IT-South",          # Italie sud (default — Brindisi, SiSen, Foggia)
     "DE": "DE-LU",             # Germany / Luxembourg
-    "IE": "GB",                # SEM not in energy-charts → use GB proxy (highly correlated)
     # US (ERCOT, CAISO) below via fallback (no hourly source on energy-charts)
 }
 
@@ -39,14 +38,12 @@ COUNTRY_TO_ZONE: dict[str, str] = {
 FALLBACK_ANNUAL_PRICES_EUR_MWH: dict[str, float] = {
     "US-ERCOT": 32.0,    # Galloway 2 (Texas) — ERCOT West Hub 2024 avg ≈ $35/MWh, EUR conv 0.91
     "US-CAISO": 56.0,    # Lotus (California) — CAISO SP15 2024 avg ≈ $62/MWh
-    "IE-SEM":   85.0,    # Elgin (Ireland) — SEMOpx DAM avg 2024-2025 ≈ €85/MWh
 }
 
-# US/IE-zone hardcoded mapping (no real-time API — flat-price fallback only)
+# US-zone hardcoded mapping (no real-time API — flat-price fallback only)
 PARK_FALLBACK_ZONE: dict[str, str] = {
     "galloway-2": "US-ERCOT",
     "lotus-solar-farm": "US-CAISO",
-    "elgin-ireland-191": "IE-SEM",
 }
 
 # Override per park_id when we know the precise zone (e.g. Manzano = North Italy)
