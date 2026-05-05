@@ -37,15 +37,15 @@ COUNTRY_TO_ZONE: dict[str, str] = {
 # Used as a flat constant when the hourly API doesn't cover the zone.
 FALLBACK_ANNUAL_PRICES_EUR_MWH: dict[str, float] = {
     # Reserved for future use — no flat fallbacks currently active.
-    # Lotus (CAISO) now fetches real LMP via gridstatus.
+    # Lotus (CAISO) now fetches real LMP via direct OASIS HTTPS.
     # Galloway (ERCOT) shows "—" until proper MIS auth is configured.
 }
 
 # US-zone routing for live data lookups.
-# Setting a zone here enables the gridstatus integration for that park.
+# Setting a zone here enables the direct OASIS HTTPS lookup for that park.
 PARK_FALLBACK_ZONE: dict[str, str] = {
     "galloway-2": "US-ERCOT",        # ERCOT MIS auth-walled — UI shows "—" with explanation
-    "lotus-solar-farm": "US-CAISO",  # CAISO public OASIS — real LMP via gridstatus
+    "lotus-solar-farm": "US-CAISO",  # CAISO public OASIS — real LMP via direct HTTPS
 }
 
 # Override per park_id when we know the precise zone (e.g. Manzano = North Italy)

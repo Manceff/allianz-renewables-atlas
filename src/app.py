@@ -1143,7 +1143,7 @@ fit_scheme = _park_obj_for_fit.fit_scheme if _park_obj_for_fit else None
 fit_expiry = _park_obj_for_fit.fit_expiry_year if _park_obj_for_fit else None
 is_fit_locked = fit_price is not None
 
-# US RTO routing: gridstatus for CAISO (real hourly LMP). ERCOT MIS is locked
+# US RTO routing: direct OASIS HTTPS for CAISO (real hourly LMP). ERCOT MIS is locked
 # behind login since 2025 — keep flat-fallback for Galloway with a clear note.
 _us_zone = get_us_zone(selected_park_id)
 _currency = park_currency(zone, _us_zone)  # 'USD' for US parks, 'EUR' otherwise
@@ -1562,10 +1562,13 @@ elif live_spot and live_spot.get("price_eur_mwh") is not None:
     else:
         l5.metric("Revenue/h (live)", "—")
 elif _is_us_caiso:
-    # CAISO SP15 (Lotus) — real LMP via gridstatus.OASIS, USD native.
-    # Cache only successful results; a None failure is NOT cached so the next
-    # page reload retries OASIS instead of being stuck on stale "—".
-    @st.cache_data(ttl=900, show_spinner=False)
+    # CAISO SP15 (Lotus) — real LMP via direct OASIS HTTPS (no gridstatus).
+    # CAISO publishes the day-ahead market once per day around 13:00 PT (~21:00
+    # UTC). Refreshing every 15 min is wasteful AND triggers OASIS's aggressive
+    # per-IP rate-limit (HTTP 429) on shared cloud IPs. Cache for 6 hours so
+    # that a successful fetch is reused all afternoon, and an exception (cache
+    # miss next page load) only retries every few hours rather than every refresh.
+    @st.cache_data(ttl=21600, show_spinner=False)
     def _fetch_caiso_live_cached(zone: str) -> dict:
         result = fetch_caiso_current_spot(zone)
         if result is None:
@@ -1584,7 +1587,7 @@ elif _is_us_caiso:
             delta=caiso_live["time_iso"][:16].replace("T", " "),
             delta_color="off",
             help=(
-                f"Real day-ahead LMP at trading hub TH_SP15_GEN-APND, fetched live via gridstatus.OASIS. "
+                f"Real day-ahead LMP at trading hub TH_SP15_GEN-APND, fetched live from CAISO OASIS over HTTPS. "
                 f"Settlement timestamp: {caiso_live['time_iso']}. CAISO publishes the next-day market "
                 "around 13:00 PT, so the most recent settled hour is shown."
             ),
@@ -1611,7 +1614,7 @@ elif _is_us_caiso:
                 "(1) transient OASIS rate-limit on shared cloud IPs, "
                 "(2) DAM not yet published for the requested day (CAISO publishes the next-day "
                 "market around 13:00 Pacific), "
-                "(3) outbound HTTP blocked by the host network — gridstatus uses plain HTTP. "
+                "(3) outbound HTTPS blocked by the host network. "
                 "The fetcher walks back up to 7 days automatically; if all 7 fail, OASIS is the "
                 "bottleneck. Refresh the page in 5-10 min. No flat proxy shown to avoid misleading numbers."
             ),
@@ -1627,7 +1630,7 @@ elif _is_us_ercot:
         delta_color="off",
         help=(
             "ERCOT public MIS was retired in 2025 — hourly LMP at HB_WEST now requires a registered "
-            "ERCOT account. Until credentials are configured for gridstatus, no live spot is shown "
+            "ERCOT account. Until credentials are configured, no live spot is shown "
             "rather than a misleading flat proxy. "
             "Asset note: Galloway 2 has a long-term PPA with EDF Energy Services for the BASF Freeport "
             "site — actual revenue is locked at the contracted PPA strike, not the wholesale spot."
@@ -2062,7 +2065,7 @@ elif zone and period_prices and period_prices.get("prices_eur_mwh"):
     )
     revenue_source = f"hourly day-ahead zone {zone}"
 
-# Priority 2b : CAISO real hourly LMP via gridstatus (USD native)
+# Priority 2b : CAISO real hourly LMP via direct OASIS HTTPS (USD native)
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_caiso_period_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
     return fetch_caiso_period_prices(
@@ -2107,7 +2110,7 @@ if not revenue_metrics and _is_us_caiso:
         }
         coverage_pct = (len(valid_prices) / max(len(hk), 1)) * 100.0
         revenue_source = (
-            f"CAISO SP15 hourly day-ahead LMP via gridstatus.OASIS "
+            f"CAISO SP15 hourly day-ahead LMP via OASIS HTTPS "
             f"({len(valid_prices):,}/{len(hk):,} hours covered, {coverage_pct:.0f}%) — USD native"
         )
 

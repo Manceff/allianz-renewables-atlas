@@ -26,5 +26,5 @@ pytest>=8.0.0
 ruff>=0.3.0
 pvlib>=0.11
 
-# US wholesale electricity prices (CAISO LMP via gridstatus)
-gridstatus>=0.30
+# US wholesale electricity prices: CAISO LMP fetched via direct OASIS HTTPS
+# (urllib + zipfile + csv stdlib only — no extra dependency).

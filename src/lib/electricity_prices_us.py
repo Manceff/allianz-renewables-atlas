@@ -1,11 +1,16 @@
-"""US wholesale electricity prices via gridstatus.
+"""US wholesale electricity prices — direct OASIS HTTPS fetch (no gridstatus).
 
 CAISO SP15 (zone for Lotus Solar Farm in California) is fetched as real
 hourly day-ahead LMP in USD/MWh via the OASIS public CSV endpoint.
 
+Implementation note: we used to depend on `gridstatus` but it pulled 6 heavy
+deps (pandas, bs4, lxml, tqdm, tabulate, requests) and called OASIS over plain
+HTTP (302-redirected to HTTPS), which Streamlit Cloud's outbound network
+rejects in some cases. Replaced with stdlib urllib + zipfile + csv, HTTPS-only,
+~40 LoC. Same data, faster cold-start, no dependency footprint.
+
 ERCOT West Hub (zone for Galloway 2 in West Texas) requires login on the
-new MIS portal — gridstatus returns HTTP 403 without credentials. We keep
-the flat-price proxy fallback for ERCOT until proper auth is configured.
+new MIS portal. We keep the "—" honest unavailable state for ERCOT.
 
 USD-native — no EUR conversion. Display layer formats with $ symbol when
 the park's zone is US.
@@ -13,8 +18,13 @@ the park's zone is US.
 
 from __future__ import annotations
 
+import csv
 import datetime as _dt
+import io
 import logging
+import urllib.error
+import urllib.request
+import zipfile
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -24,56 +34,112 @@ CAISO_HUB_BY_ZONE = {
     "US-CAISO": "TH_SP15_GEN-APND",  # Southern California, Lotus location
 }
 
-# ERCOT hubs (kept here for documentation — currently unreachable without MIS auth)
 ERCOT_HUB_BY_ZONE = {
     "US-ERCOT": "HB_WEST",  # West Hub, Galloway 2 location
 }
 
 
+_OASIS_BASE = "https://oasis.caiso.com/oasisapi/SingleZip"
+
+
+class _OASISRateLimited(Exception):
+    """Raised when OASIS returns HTTP 429 — abort retry loop, don't hammer further."""
+
+
+def _fetch_oasis_csv(node: str, start: _dt.date, end: _dt.date) -> list[dict[str, str]] | None:
+    """Direct OASIS HTTPS call → unzip → parse CSV → list[dict]. None on failure.
+
+    Raises _OASISRateLimited on HTTP 429 so the caller can break out of any
+    retry/walk-back loop. OASIS rate-limits aggressively per source IP — once
+    you hit 429, hammering more makes it worse.
+    """
+    start_str = start.strftime("%Y%m%dT07:00-0000")
+    end_str = end.strftime("%Y%m%dT07:00-0000")
+    params = (
+        "resultformat=6&queryname=PRC_LMP&version=12"
+        f"&market_run_id=DAM&node={node}"
+        f"&startdatetime={start_str}&enddatetime={end_str}"
+    )
+    url = f"{_OASIS_BASE}?{params}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "allianz-renewables-atlas/1.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = resp.read()
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            logger.warning("OASIS rate-limited (429) on %s %s→%s — aborting", node, start, end)
+            raise _OASISRateLimited() from e
+        logger.warning("OASIS HTTPS fetch failed for %s %s→%s: HTTP %s", node, start, end, e.code)
+        return None
+    except (urllib.error.URLError, TimeoutError) as e:
+        logger.warning("OASIS HTTPS fetch failed for %s %s→%s: %s", node, start, end, e)
+        return None
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as zf:
+            csv_name = zf.namelist()[0]
+            with zf.open(csv_name) as f:
+                text = f.read().decode("utf-8")
+        rows = list(csv.DictReader(io.StringIO(text)))
+    except (zipfile.BadZipFile, KeyError, IndexError, UnicodeDecodeError) as e:
+        logger.warning("OASIS CSV parse failed: %s", e)
+        return None
+
+    # OASIS returns BOTH LMP_PRC (price) and component sub-rows (energy, congestion, loss)
+    # in the same file. Filter to the price rows only.
+    return [r for r in rows if r.get("LMP_TYPE") == "LMP" or r.get("XML_DATA_ITEM") == "LMP_PRC"]
+
+
 def fetch_caiso_period_prices(zone: str, start: _dt.date, end: _dt.date) -> dict[str, Any] | None:
     """Fetch hourly day-ahead LMP for a CAISO trading hub between start and end.
 
-    Returns dict with hourly arrays in USD/MWh, or None on failure. Tries the
-    requested window first, then walks back up to 7 days if OASIS returns nothing
-    (weekends, holidays, or transient publishing gaps can leave today/yesterday
-    empty even when the endpoint itself is healthy).
+    Returns dict with hourly arrays in USD/MWh, or None on failure. Walks back
+    up to 7 days if the requested window returns empty (weekends, holidays,
+    or pre-publication windows can leave today/yesterday empty even when OASIS
+    itself is healthy — DAM publishes ~13:00 Pacific = 21:00 UTC).
     """
     hub = CAISO_HUB_BY_ZONE.get(zone)
     if not hub:
         return None
 
-    try:
-        from gridstatus import CAISO
-        caiso = CAISO()
-    except Exception as e:
-        logger.warning("CAISO import failed: %s", e)
-        return None
-
-    # Try the original window, then progressively earlier windows. CAISO DAM
-    # publishes ~13:00 PT day-ahead, so on Streamlit Cloud (UTC) we sometimes
-    # query before publication; falling back one or two days fixes it.
-    df = None
-    for offset in range(0, 7):
+    rows = None
+    # Walk back at most 3 days to find a published window. Each iteration is a
+    # separate OASIS request, so we cap the retries to limit the rate-limit blast
+    # radius. Break immediately on 429 — hammering further only extends the ban.
+    for offset in range(0, 3):
         try_start = start - _dt.timedelta(days=offset)
         try_end = end - _dt.timedelta(days=offset)
         try:
-            df = caiso.get_lmp(
-                start=try_start, end=try_end,
-                market="DAY_AHEAD_HOURLY",
-                locations=[hub],
-            )
-        except Exception as e:
-            logger.warning("CAISO LMP fetch failed (offset=%d): %s", offset, e)
-            df = None
-        if df is not None and not df.empty:
+            rows = _fetch_oasis_csv(hub, try_start, try_end)
+        except _OASISRateLimited:
+            break
+        if rows:
             break
 
-    if df is None or df.empty:
+    if not rows:
         return None
 
-    # gridstatus columns: Time, Interval Start, Interval End, Location, Market, LMP, Energy, Congestion, Loss
-    timestamps = [int(t.timestamp()) for t in df["Interval Start"]]
-    prices = [float(p) if p is not None else None for p in df["LMP"]]
+    # Sort by interval start ascending — OASIS returns rows in arbitrary order
+    rows.sort(key=lambda r: r.get("INTERVALSTARTTIME_GMT", ""))
+
+    timestamps: list[int] = []
+    prices: list[float | None] = []
+    for r in rows:
+        try:
+            ts_str = r["INTERVALSTARTTIME_GMT"]
+            # ISO 8601 like "2026-05-04T07:00:00-00:00"
+            ts_dt = _dt.datetime.fromisoformat(ts_str.replace("-00:00", "+00:00"))
+            timestamps.append(int(ts_dt.timestamp()))
+        except (KeyError, ValueError):
+            continue
+        try:
+            prices.append(float(r["MW"]))  # OASIS calls the LMP value column "MW"
+        except (KeyError, ValueError, TypeError):
+            prices.append(None)
+
+    if not timestamps:
+        return None
+
     return {
         "zone": zone,
         "currency": "USD",
