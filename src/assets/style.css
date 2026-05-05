@@ -8,9 +8,11 @@
 
 /* ---- Tokens — bone palette (editorial, no AI cliché) -------------- */
 :root {
-  --bg-deep:        #000000;        /* pure black — page frame */
-  --bg-elevated:    #0a0a0a;        /* surface cards, slightly above black */
-  --bg-overlay:     rgba(20, 20, 20, 0.7);
+  /* Off-black with a barely-perceptible cool blue tint.
+     Pure #000 reads as generic "AI dark mode" — this depth feels intentional. */
+  --bg-deep:        #07090c;
+  --bg-elevated:    #0d1015;        /* surface cards */
+  --bg-overlay:     rgba(20, 24, 30, 0.7);
   --border-subtle:  rgba(232, 228, 214, 0.08);
   --border-strong:  rgba(232, 228, 214, 0.18);
   --text-primary:   #e8e4d6;        /* bone — main text */
@@ -23,11 +25,11 @@
   --severity-green: #84cc16;        /* desaturated lime */
   --severity-amber: #eab308;
   --severity-red:   #dc2626;
-  --shadow-tinted:  0 4px 24px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.8);
+  --shadow-tinted:  0 4px 24px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.7);
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
-  --grain-opacity: 0.020;
+  --grain-opacity: 0.022;
 }
 
 /* ---- Hide Streamlit chrome ----------------------------------------- */
@@ -88,11 +90,20 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
   border-radius: var(--radius-md);
   padding: 18px 20px 16px;
   box-shadow: var(--shadow-tinted);
-  transition: border-color 200ms ease-out, transform 200ms ease-out;
+  transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1),
+              background 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 [data-testid="stMetric"]:hover {
   border-color: var(--border-strong);
+  background: linear-gradient(180deg, var(--bg-elevated) 0%, rgba(232,228,214,0.015) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 [data-testid="stMetricValue"] {
@@ -305,10 +316,11 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
   left: 0;
   top: 50%;
   transform: translateY(-50%);
-  width: 3px;
-  height: 12px;
+  width: 2px;
+  height: 11px;
   background: var(--accent);
-  border-radius: 1px;
+  border-radius: 0;
+  opacity: 0.65;
 }
 
 .section-header .section-caption {
@@ -326,6 +338,142 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
 @keyframes pulse {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
+}
+
+/* ---- Atlas header — eyebrow / title / single-line tag --------------- */
+.atlas-header {
+  text-align: center;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 1.6rem 1rem 0.4rem;
+}
+
+.atlas-eyebrow {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+
+.atlas-title {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  color: var(--text-primary);
+  line-height: 1.05;
+}
+
+.atlas-tag {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  margin: 14px auto 10px;
+  max-width: 700px;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: -0.003em;
+}
+
+.atlas-tag .tech {
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  background: rgba(232, 228, 214, 0.05);
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.01em;
+}
+
+.atlas-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.01em;
+  margin: 4px 0 0;
+}
+
+.atlas-note-flag {
+  color: var(--severity-amber);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 3px;
+  background: rgba(234, 179, 8, 0.06);
+}
+
+/* ---- Atlas key figures — inline pill bar (replaces generic 3 cards) ---- */
+.atlas-kpis {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 22px;
+  margin: 18px auto 28px;
+  padding: 14px 28px;
+  max-width: max-content;
+  background: linear-gradient(180deg, rgba(232,228,214,0.04) 0%, rgba(232,228,214,0.015) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  box-shadow: var(--shadow-tinted), inset 0 1px 0 rgba(232,228,214,0.04);
+}
+
+.atlas-kpis .kpi {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.atlas-kpis .kpi-num {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 1.45rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+}
+
+.atlas-kpis .kpi-lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 500;
+}
+
+.atlas-kpis .kpi-codes {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.atlas-kpis .kpi-sep {
+  color: var(--text-faint);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.0rem;
+  opacity: 0.5;
+  font-weight: 300;
+}
+
+@media (max-width: 720px) {
+  .atlas-kpis {
+    flex-wrap: wrap;
+    border-radius: var(--radius-md);
+    gap: 12px 18px;
+  }
+  .atlas-kpis .kpi-codes { display: none; }
 }
 
 /* ---- Empty state — terminal hint ---------------------------------- */
@@ -392,9 +540,54 @@ hr {
 /* ---- Streamlit tooltip / help icon -------------------------------- */
 [data-testid="stTooltipIcon"] svg {
   color: var(--text-faint);
-  transition: color 180ms ease-out;
+  transition: color 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 [data-testid="stTooltipIcon"]:hover svg {
   color: var(--text-secondary);
+}
+
+/* ---- Buttons (Streamlit primary/secondary) ------------------------ */
+.stButton > button {
+  font-family: 'Geist', sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: var(--radius-sm);
+}
+
+.stButton > button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+
+.stButton > button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* ---- Focus ring for keyboard nav (a11y) -------------------------- */
+*:focus-visible {
+  outline: 2px solid rgba(232, 228, 214, 0.55);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ---- Tabular numbers for all metric values ---------------------- */
+[data-testid="stMetricValue"],
+[data-testid="stMetricDelta"],
+.atlas-kpis .kpi-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Smooth horizontal rule with depth (instead of flat 1px) ---- */
+hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--border-subtle) 20%,
+    var(--border-subtle) 80%,
+    transparent 100%
+  );
+  margin: 24px 0;
 }

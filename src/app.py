@@ -400,23 +400,19 @@ def _build_satellite_html(
 
 st.markdown(
     """
-    <div style="text-align: center; padding: 1.2rem 0 0.6rem; max-width: 920px; margin: 0 auto;">
-        <h1 style="margin: 0; font-size: 1.95rem; font-weight: 600; letter-spacing: -0.02em;">
-            Allianz Renewables Atlas
-        </h1>
-        <p style="color: #cbd5e1; font-size: 1.0rem; margin-top: 0.55rem; line-height: 1.55; font-weight: 500;">
-            Plateforme d'estimation de la production des parcs solaires d'Allianz Capital Partners
-            identifiés publiquement (2010-2026).
-        </p>
-        <p style="color: #94a3b8; font-size: 0.82rem; margin-top: 0.45rem; line-height: 1.5; letter-spacing: 0.01em;">
-            Production reconstruite via pvlib + Open-Meteo (poste par poste, GPS exact),
-            revenue calculé sur les prix day-ahead réels (energy-charts.info ENTSO-E)
-            ou tarifs FiT contractuels (Conto Energia italien, RESS-2 irlandais).
-            <br>
-            <span style="color: #fbbf24;">Note :</span> portfolio Elgin Ireland (191 MWp, 16 sites) <b>exclu</b> de l'atlas —
-            forward sale signée déc 2023, panneaux pas encore construits ou raccordés au réseau,
-            production T12M non significative.
-        </p>
+    <div class="atlas-header">
+      <div class="atlas-eyebrow">Allianz Capital Partners · solar PV portfolio · 2010-2026</div>
+      <h1 class="atlas-title">Allianz Renewables Atlas</h1>
+      <p class="atlas-tag">
+        Plateforme d'estimation de la production solaire — parcs identifiés publiquement,
+        reconstruits via <span class="tech">pvlib</span> + <span class="tech">Open-Meteo</span>
+        (poste par poste, GPS exact), revenue ancré sur le day-ahead ENTSO-E ou les tarifs
+        FiT contractuels (Conto Energia, RESS-2).
+      </p>
+      <p class="atlas-note">
+        <span class="atlas-note-flag">Out of scope</span>
+        Elgin Ireland (191 MWp / 16 sites) — forward sale déc 2023, construction en cours.
+      </p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -426,27 +422,36 @@ parks_df = _load_parks_df()
 reported_map = _load_reported()
 
 # ---------------------------------------------------------------------------
-# Top metrics
+# Atlas key figures — single inline pill bar (replaces generic 3-card grid)
 # ---------------------------------------------------------------------------
 
-c1, c2, c3 = st.columns(3)
-c1.metric(
-    "Total parks tracked",
-    f"{len(parks_df)}",
-    help="Solar PV assets owned directly by Allianz Capital Partners with public press releases.",
-)
-c2.metric(
-    "Combined nameplate capacity",
-    f"{parks_df['capacity_mwp'].sum():,.0f} MWp",
-    help="Sum of peak DC capacity across all parks. Each park's capacity is sourced from its acquisition press release.",
-)
-c3.metric(
-    "Countries",
-    f"{parks_df['country'].nunique()}",
-    help=", ".join(sorted(parks_df["country"].unique())),
-)
+_n_parks = len(parks_df)
+_total_mwp = parks_df['capacity_mwp'].sum()
+_n_countries = parks_df['country'].nunique()
+_country_codes = " · ".join(sorted(parks_df["country"].unique()))
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <div class="atlas-kpis">
+      <div class="kpi">
+        <span class="kpi-num">{_n_parks}</span>
+        <span class="kpi-lbl">parks</span>
+      </div>
+      <div class="kpi-sep">/</div>
+      <div class="kpi">
+        <span class="kpi-num">{_total_mwp:,.0f}</span>
+        <span class="kpi-lbl">MWp DC</span>
+      </div>
+      <div class="kpi-sep">/</div>
+      <div class="kpi">
+        <span class="kpi-num">{_n_countries}</span>
+        <span class="kpi-lbl">countries</span>
+        <span class="kpi-codes">{_country_codes}</span>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------------------------
 # Globe — custom component with click events
