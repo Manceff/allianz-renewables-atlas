@@ -141,9 +141,9 @@ def test_load_parks_index_returns_index() -> None:
     """load_parks_index() lit data/parks_index.yaml et renvoie un ParksIndex."""
     idx = load_parks_index()
     assert isinstance(idx, ParksIndex)
-    # V1 solar-only : 11 parcs solaires post-cleanup Gemini 2026-04-30
-    assert len(idx.parks) == 11
-    assert idx.metadata.total_parks_mapped == 11
+    # 9 parcs solaires opérationnels (Brindisi divested V26, Elgin out-of-scope V27)
+    assert len(idx.parks) == 9
+    assert idx.metadata.total_parks_mapped == 9
     # Tous les parcs sont solaires en V1
     assert all(p.technology.value == "solar" for p in idx.parks)
 

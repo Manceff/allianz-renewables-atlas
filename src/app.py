@@ -401,17 +401,11 @@ def _build_satellite_html(
 st.markdown(
     """
     <div class="atlas-header">
-      <div class="atlas-eyebrow">Allianz Capital Partners · solar PV portfolio · 2010-2026</div>
       <h1 class="atlas-title">Allianz Renewables Atlas</h1>
       <p class="atlas-tag">
-        Plateforme d'estimation de la production solaire — parcs identifiés publiquement,
-        reconstruits via <span class="tech">pvlib</span> + <span class="tech">Open-Meteo</span>
-        (poste par poste, GPS exact), revenue ancré sur le day-ahead ENTSO-E ou les tarifs
-        FiT contractuels (Conto Energia, RESS-2).
-      </p>
-      <p class="atlas-note">
-        <span class="atlas-note-flag">Out of scope</span>
-        Elgin Ireland (191 MWp / 16 sites) — forward sale déc 2023, construction en cours.
+        Projet personnel initi&eacute; par Mancef Ferrah dans le cadre d'une
+        candidature en alternance Investment Management. Atlas exploratoire
+        construit &agrave; partir de sources publiques uniquement.
       </p>
     </div>
     """,
@@ -425,10 +419,14 @@ reported_map = _load_reported()
 # Atlas key figures — single inline pill bar (replaces generic 3-card grid)
 # ---------------------------------------------------------------------------
 
-_n_parks = len(parks_df)
-_total_mwp = parks_df['capacity_mwp'].sum()
-_n_countries = parks_df['country'].nunique()
-_country_codes = " · ".join(sorted(parks_df["country"].unique()))
+# Atlas KPIs — distinguish effectively owned from "in atlas for context"
+from src.lib.parks_loader import load_parks_index as _load_idx_for_kpi
+_idx_kpi = _load_idx_for_kpi()
+_owned = [p for p in _idx_kpi.parks if not p.divested]
+_n_parks = len(_owned)
+_total_mwp = sum(p.capacity_mwp or 0 for p in _owned)
+_n_countries = len({p.country for p in _owned})
+_country_codes = " · ".join(sorted({p.country for p in _owned}))
 
 st.markdown(
     f"""
@@ -940,15 +938,41 @@ if _is_forward_sale:
 
     st.stop()  # Skip Live / T12M / Backtest sections for forward-sale portfolios
 
-# T12M rolling window — last 12 months of available data
+# T12M rolling window — aligned to whole calendar months ending on the last
+# COMPLETE month available (subject to Open-Meteo Archive ~5-day lag).
+# This avoids the "partial-month" stub at both ends of the window that made
+# the monthly bar chart look broken (e.g. Apr 25 with only 1 day of data).
+import calendar as _cal
 import datetime as _dt_mod
+
 _today = _dt_mod.date.today()
-T12M_END = _today - _dt_mod.timedelta(days=ARCHIVE_LAG_DAYS)
-T12M_START = T12M_END - _dt_mod.timedelta(days=T12M_DAYS - 1)
+_cutoff = _today - _dt_mod.timedelta(days=ARCHIVE_LAG_DAYS)
+
+# Pick the last fully-available month
+_last_day_of_cutoff_month = _cal.monthrange(_cutoff.year, _cutoff.month)[1]
+if _cutoff.day >= _last_day_of_cutoff_month:
+    # Cutoff IS at or past the last day of its month — use that month as end
+    T12M_END = _dt_mod.date(_cutoff.year, _cutoff.month, _last_day_of_cutoff_month)
+else:
+    # Cutoff is mid-month — fall back to end of previous month
+    _prev_m = _cutoff.month - 1
+    _prev_y = _cutoff.year
+    if _prev_m == 0:
+        _prev_m = 12
+        _prev_y -= 1
+    T12M_END = _dt_mod.date(_prev_y, _prev_m, _cal.monthrange(_prev_y, _prev_m)[1])
+
+# Start = first day of the month 11 months before T12M_END
+_start_m = T12M_END.month + 1
+_start_y = T12M_END.year - 1
+if _start_m > 12:
+    _start_m -= 12
+    _start_y += 1
+T12M_START = _dt_mod.date(_start_y, _start_m, 1)
 
 # Same window 1 year before for year-on-year comparison
-T12M_END_PREV = T12M_END - _dt_mod.timedelta(days=365)
-T12M_START_PREV = T12M_START - _dt_mod.timedelta(days=365)
+T12M_END_PREV = _dt_mod.date(T12M_END.year - 1, T12M_END.month, T12M_END.day)
+T12M_START_PREV = _dt_mod.date(T12M_START.year - 1, T12M_START.month, T12M_START.day)
 
 # Compute production over T12M and the previous T12M
 from src.lib.solar_model import compute_period_production
@@ -1006,18 +1030,20 @@ monthly = monthly_aggregates_from_timestamps(
 )
 
 # Yesterday's output (J-1 — last full day in T12M data)
-import datetime as _dtmod2
+# Number of days in the window is dynamic (365 or 366 for leap years), derive from dates.
 _yest = T12M_END  # last day in our data window
-_yest_idx_start = (T12M_DAYS - 1) * 24
-_yest_idx_end = T12M_DAYS * 24
+_n_days_t12m = (T12M_END - T12M_START).days + 1
+_yest_idx_start = (_n_days_t12m - 1) * 24
+_yest_idx_end = _n_days_t12m * 24
 yesterday_kwh = sum(hourly_data["hourly_production_kwh"][_yest_idx_start:_yest_idx_end])
 yesterday_mwh = yesterday_kwh / 1000.0
 
 # Same calendar day 1 year before (from T12M_START_PREV window)
 yest_prev_mwh = None
 if period_data_prev:
-    prev_idx_start = (T12M_DAYS - 1) * 24
-    prev_idx_end = T12M_DAYS * 24
+    _n_days_prev = (T12M_END_PREV - T12M_START_PREV).days + 1
+    prev_idx_start = (_n_days_prev - 1) * 24
+    prev_idx_end = _n_days_prev * 24
     yest_prev_kwh = sum(period_data_prev["hourly_production_kwh"][prev_idx_start:prev_idx_end])
     yest_prev_mwh = yest_prev_kwh / 1000.0
 
@@ -1038,19 +1064,20 @@ if reported:
 # Park header
 # ---------------------------------------------------------------------------
 
-# Divested banner (e.g. Brindisi) — render before the header
+# Divested / failed-deal banner — render before the header
 if _park_model_for_status and _park_model_for_status.divested:
+    _banner_label = _park_model_for_status.divestment_label or "DIVESTED ASSET — HISTORICAL TRACEABILITY ONLY"
     st.markdown(
         f"""
         <div style="
           margin: 14px 0 10px; padding: 12px 16px;
-          background: rgba(220, 38, 38, 0.08);
-          border-left: 4px solid #dc2626;
-          border-radius: 6px;
-          font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
-          color: #fecaca; line-height: 1.5;">
-          <span style="color: #f87171; font-weight: 600; letter-spacing: 0.04em;">DIVESTED ASSET — HISTORICAL TRACEABILITY ONLY</span>
-          <div style="margin-top: 4px; color: #cbd5e1;">
+          background: rgba(202, 138, 4, 0.06);
+          border-left: 3px solid var(--severity-amber);
+          border-radius: 4px;
+          font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+          color: var(--text-secondary); line-height: 1.55;">
+          <span style="color: var(--severity-amber); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;">{_banner_label}</span>
+          <div style="margin-top: 6px; color: var(--text-muted); font-size: 0.72rem;">
             {_park_model_for_status.divestment_note or "Allianz no longer owns this asset."}
           </div>
         </div>
@@ -1105,11 +1132,9 @@ from src.lib.electricity_prices import get_us_zone
 from src.lib.electricity_prices_us import (
     fetch_caiso_period_prices,
     fetch_caiso_current_spot,
-    is_us_zone,
     park_currency,
     format_money,
     format_price,
-    CAISO_HUB_BY_ZONE,
 )
 _park_obj_for_fit = _get_park_for_fit2(selected_park_id)
 fit_price = _park_obj_for_fit.fit_strike_price_eur_mwh if _park_obj_for_fit else None
@@ -1493,38 +1518,36 @@ elif _is_us_caiso:
         else:
             l5.metric("Revenue/h (live est.)", "—")
     else:
-        # CAISO fetch failed → degrade to flat proxy in USD
-        usd_proxy = _live_fallback_price * 1.10 if _live_fallback_price else 60.0  # rough EUR→USD
+        # CAISO fetch failed (transient OASIS outage) → show "—" honestly.
         l4.metric(
-            "Spot price (CAISO proxy)",
-            f"$ {usd_proxy:.0f}/MWh",
-            delta="flat avg (CAISO unavailable)",
+            "Spot price (CAISO SP15)",
+            "—",
+            delta="OASIS unavailable",
             delta_color="off",
-            help="CAISO LMP fetch failed. Using flat annual average proxy in USD.",
+            help=(
+                "CAISO OASIS public endpoint did not return data on this query — could be a transient "
+                "rate-limit or OASIS outage. Try refreshing the page in a few minutes. "
+                "No flat proxy shown to avoid misleading numbers."
+            ),
         )
-        if live_weather:
-            l5.metric("Revenue/h (proxy)", f"$ {estimated_mw * usd_proxy:,.0f}", delta="at flat avg", delta_color="off")
-        else:
-            l5.metric("Revenue/h (proxy)", "—")
+        l5.metric("Revenue/h", "—", help="Spot price unavailable — see tooltip.")
 elif _is_us_ercot:
-    # ERCOT West Hub (Galloway) — MIS locked behind login since 2025, flat-fallback in USD
-    usd_proxy = _live_fallback_price * 1.10 if _live_fallback_price else 35.0
+    # ERCOT West Hub (Galloway) — public MIS auth-walled since 2025.
+    # No reliable hourly LMP without a registered account → show "—" honestly.
     l4.metric(
-        "Spot price (ERCOT proxy)",
-        f"$ {usd_proxy:.0f}/MWh",
-        delta="flat avg (MIS auth-walled)",
+        "Spot price (ERCOT)",
+        "—",
+        delta="data unavailable",
         delta_color="off",
         help=(
-            f"ERCOT MIS public access was retired in 2025 — hourly LMP data now requires a registered "
-            f"account (https://www.ercot.com/services/comm/mkt_rules/). Using a PPA-effective proxy of "
-            f"~${usd_proxy:.0f}/MWh until credentials are configured. West Hub 2024 day-ahead avg "
-            f"was ~$27/MWh (ERCOT 50% drop YoY due to solar+storage build-out)."
+            "ERCOT public MIS was retired in 2025 — hourly LMP at HB_WEST now requires a registered "
+            "ERCOT account. Until credentials are configured for gridstatus, no live spot is shown "
+            "rather than a misleading flat proxy. "
+            "Asset note: Galloway 2 has a long-term PPA with EDF Energy Services for the BASF Freeport "
+            "site — actual revenue is locked at the contracted PPA strike, not the wholesale spot."
         ),
     )
-    if live_weather:
-        l5.metric("Revenue/h (proxy)", f"$ {estimated_mw * usd_proxy:,.0f}", delta="at flat avg", delta_color="off")
-    else:
-        l5.metric("Revenue/h (proxy)", "—")
+    l5.metric("Revenue/h", "—", help="Spot price unavailable for ERCOT — see Spot price tooltip.")
 else:
     l4.metric("Spot price (live)", "—", help=f"Zone {live_zone or '—'} not available right now.")
     l5.metric("Revenue/h (live est.)", "—")
@@ -1995,22 +2018,24 @@ if not revenue_metrics and _is_us_caiso:
             f"({len(valid_prices):,}/{len(hk):,} hours covered, {coverage_pct:.0f}%) — USD native"
         )
 
-# Priority 3 : flat fallback proxy (US ERCOT — MIS locked behind login since 2025)
-if not revenue_metrics and fallback_price is not None:
+# Priority 3 : last-resort flat fallback (rarely needed — only if a non-US, non-FiT, non-zonal park appears)
+if not revenue_metrics and fallback_price is not None and not _is_us_ercot and not _is_us_caiso:
     flat_prices = [fallback_price] * len(hourly_data["hourly_production_kwh"])
     revenue_metrics = compute_revenue_metrics(
         hourly_production_kwh=hourly_data["hourly_production_kwh"],
         hourly_prices_eur_mwh=flat_prices,
     )
-    if _is_us_ercot:
-        revenue_source = (
-            f"flat PPA-effective proxy (${fallback_price:.0f}/MWh) — ERCOT MIS requires login since 2025, "
-            "register at https://www.ercot.com/services/comm/mkt_rules/ to unlock real LMP"
-        )
-    else:
-        revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
+    revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
 
-_revenue_caption = revenue_source or f"Zone {zone or '—'} not available — revenue cannot be computed."
+# Honest empty state for ERCOT (auth-walled)
+if not revenue_metrics and _is_us_ercot:
+    _revenue_caption = (
+        "ERCOT public MIS auth-walled since 2025 — hourly LMP at HB_WEST not available without registered account. "
+        "Revenue not computed (avoiding misleading proxy). Galloway 2 has a long-term PPA with EDF Energy Services — "
+        "actual cash flow is locked at PPA strike, not wholesale spot."
+    )
+else:
+    _revenue_caption = revenue_source or f"Zone {zone or '—'} not available — revenue cannot be computed."
 
 st.markdown(
     f"""

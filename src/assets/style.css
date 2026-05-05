@@ -337,73 +337,39 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
   opacity: 0.85;
 }
 
-/* ---- Atlas header — eyebrow / title / single-line tag --------------- */
+/* ---- Atlas header — minimalist centered block ----------------------- */
 .atlas-header {
-  text-align: center;
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 1.6rem 1rem 0.4rem;
-}
-
-.atlas-eyebrow {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  font-weight: 500;
-  margin-bottom: 14px;
+  width: 100%;
+  text-align: center !important;
+  padding: 2rem 1rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .atlas-title {
-  margin: 0;
+  margin: 0 auto;
   font-size: 2.2rem;
   font-weight: 600;
   letter-spacing: -0.028em;
   color: var(--text-primary);
   line-height: 1.05;
+  text-align: center;
+  width: 100%;
 }
 
 .atlas-tag {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  margin: 12px auto 8px;
-  max-width: 640px;
-  line-height: 1.55;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  margin: 18px auto 0 !important;
+  max-width: 560px;
+  width: 100%;
+  line-height: 1.6;
   font-weight: 400;
   letter-spacing: 0.005em;
-}
-
-.atlas-tag .tech {
-  color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
-  letter-spacing: 0;
-  font-weight: 500;
-}
-
-.atlas-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 0.65rem;
-  color: var(--text-faint);
-  font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 0.02em;
-  margin: 2px 0 0;
-}
-
-.atlas-note-flag {
-  color: var(--severity-amber);
-  font-size: 0.52rem;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  padding: 1px 6px;
-  border: 1px solid rgba(202, 138, 4, 0.35);
-  border-radius: 2px;
-  background: transparent;
-  opacity: 0.85;
+  text-wrap: balance;
+  text-align: center !important;
 }
 
 /* ---- Atlas key figures — inline pill bar (replaces generic 3 cards) ---- */

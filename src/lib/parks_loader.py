@@ -103,11 +103,17 @@ class ParkModel(BaseModel):
     )
     divested: bool = Field(
         default=False,
-        description="True if Allianz no longer owns this asset. Kept in the index for historical traceability.",
+        description="True if Allianz no longer owns this asset (sold, deal failed, etc). "
+                    "Kept in the index for historical traceability or portfolio context.",
     )
     divestment_note: str | None = Field(
         default=None,
         description="Free-text describing the divestment: date if known, buyer, or 'date unknown'.",
+    )
+    divestment_label: str | None = Field(
+        default=None,
+        description="Custom banner label override. Default: 'DIVESTED ASSET — HISTORICAL TRACEABILITY ONLY'. "
+                    "Used for failed deals, divestments with non-standard context, etc.",
     )
     dc_ac_ratio: float = Field(default=1.30, ge=1.0, le=2.0)
     ress_strike_price_eur_mwh: float | None = Field(

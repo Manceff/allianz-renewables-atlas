@@ -5,7 +5,7 @@
 > hour-by-hour via `pvlib` + Open-Meteo Archive aux coordonnées exactes de chaque parc,
 > revenue ancré sur les prix day-ahead ENTSO-E ou les tarifs FiT contractuels.
 
-**9 parcs · 805 MWp · 5 pays** (IT, PT, FR, US, ES). Sources : 100 % publiques.
+**8 parcs détenus · 586 MWp · 5 pays** (IT, PT, FR, US, ES). +1 parc inclus pour contexte stratégique (Solara 4 — deal Allianz × WElink échoué). Sources : 100 % publiques.
 
 ![Home](docs/screenshots/01-home.png)
 
@@ -16,7 +16,7 @@
 | 1 | Manzano | IT (Friuli) | 11.2 MWp | Conto Energia II + market sale |
 | 2 | SiSen Foggia | IT (Pouilles) | 8 MWp | Conto Energia III + market sale |
 | 3 | Ourika | PT (Alentejo) | 46 MWp | Subsidy-free PPA Audax |
-| 4 | Solara 4 / Riccardo Totta | PT (Algarve) | 219 MWp | PPA Audax 20 ans |
+| 4 | Solara 4 / Riccardo Totta ⚠️ | PT (Algarve) | 219 MWp | Deal Allianz × WElink échoué — opéré par WElink, inclus pour contexte |
 | 5 | Lacs Médocains AREF II | FR (Gironde) | 9.4 MWp | Marché libre |
 | 6 | Lotus Solar Farm | US-CA | 67 MWp | PPA Southern California Edison |
 | 7 | Galloway 2 | US-TX | 147 MWp | PPA EDF Energy Services |

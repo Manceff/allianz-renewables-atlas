@@ -36,14 +36,16 @@ COUNTRY_TO_ZONE: dict[str, str] = {
 # Sources : ERCOT West Hub 2024 settlement avg, CAISO SP15 2024, public reports.
 # Used as a flat constant when the hourly API doesn't cover the zone.
 FALLBACK_ANNUAL_PRICES_EUR_MWH: dict[str, float] = {
-    "US-ERCOT": 32.0,    # Galloway 2 (Texas) — ERCOT West Hub 2024 avg ≈ $35/MWh, EUR conv 0.91
-    "US-CAISO": 56.0,    # Lotus (California) — CAISO SP15 2024 avg ≈ $62/MWh
+    # Reserved for future use — no flat fallbacks currently active.
+    # Lotus (CAISO) now fetches real LMP via gridstatus.
+    # Galloway (ERCOT) shows "—" until proper MIS auth is configured.
 }
 
-# US-zone hardcoded mapping (no real-time API — flat-price fallback only)
+# US-zone routing for live data lookups.
+# Setting a zone here enables the gridstatus integration for that park.
 PARK_FALLBACK_ZONE: dict[str, str] = {
-    "galloway-2": "US-ERCOT",
-    "lotus-solar-farm": "US-CAISO",
+    "galloway-2": "US-ERCOT",        # ERCOT MIS auth-walled — UI shows "—" with explanation
+    "lotus-solar-farm": "US-CAISO",  # CAISO public OASIS — real LMP via gridstatus
 }
 
 # Override per park_id when we know the precise zone (e.g. Manzano = North Italy)

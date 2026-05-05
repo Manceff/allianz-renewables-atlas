@@ -84,14 +84,17 @@ parks:
     name: "Solara 4 (Central Fotovoltaica Alcoutim)"
     country: PT
     technology: solar
-    coordinates: [37.3947, -7.7043]  # Vaqueiros, Alcoutim, Algarve. Source OSM "Central Fotovoltaica Riccardo Totta" 220 MW (exact polygon) — corrige GEM Wiki à 5 km off
+    coordinates: [37.3947, -7.7043]  # Vaqueiros, Alcoutim, Algarve. Source OSM "Central Fotovoltaica Riccardo Totta" 220 MW (exact polygon)
     capacity_mwp: 219
-    commissioning_year: 2021  # signé 2018, retardé construction + COVID
-    operator: "WElink Energy / China Triumph International Engineering"
-    allianz_stake_pct: 100
-    acquisition_year: 2018
-    press_release_url: "https://www.allianzcapitalpartners.com/media/news/121818-allianz-acquire-largest-subsidy-free-solar-project-portugal/"
-    notes: "Méga-projet 800 ha, 661 500 panneaux. Renommé Riccardo Totta PV Plant à l'inauguration. Initialement prévu 2019, inauguré octobre 2021 (retards construction + COVID). Conçu pour 100 000 foyers. Consolide partenariat ACP-WElink."
+    commissioning_year: 2021  # construit 2019-2020, inauguré oct 2021
+    operator: "WElink Energy / On Top of Renewable (engineering)"
+    allianz_stake_pct: 0  # accord Allianz × WElink échoué — Allianz n'a finalement PAS acquis cet actif
+    acquisition_year: null
+    press_release_url: "https://www.aplitop.com/utilizadores-detalhe.aspx?u=88&l=fr"
+    notes: "Méga-projet 800 ha, 661 500 panneaux, renommé Riccardo Totta PV Plant à l'inauguration. Construit 2019-2020 par WElink + Onrenewables (Valence/Marbella/Tokyo), 800+ employés sur le chantier. Conçu pour ~100 000 foyers. INCLUS DANS L'ATLAS POUR CONTEXTE STRATÉGIE ACP IBÉRIQUE (Allianz détient effectivement la centrale-soeur Ourika 46 MWp, à ~80 km à Ourique/Beja) — bien que le deal Allianz × WElink pour Solara 4 ait échoué selon la presse portugaise (interview Hugo Paz : « Non. Nous avons l'intention de continuer à faire fonctionner le projet de la meilleure façon possible »)."
+    divested: true
+    divestment_label: "DEAL DID NOT CLOSE — included for portfolio context"
+    divestment_note: "Allianz × WElink Solara 4 acquisition fell through. Hugo Paz (WElink) confirmed in press interview that the deal failed and WElink would continue operating the asset itself. Allianz did successfully acquire the sister plant Ourika (46 MWp, ~80 km north in Ourique/Beja) — included here for context on ACP's Iberian strategy."
     has_pvgis_estimate: true
     has_reported_production: true
 
