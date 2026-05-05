@@ -1467,12 +1467,11 @@ _park_tz_name = _PARK_TZ_OVERRIDE.get(selected_park_id) or _COUNTRY_TZ.get(
 
 
 def _local_time_str(iso_utc: str, tz_name: str = _park_tz_name) -> str:
-    """Convert a UTC ISO timestamp to 'HH:MM park-local (HH:MM UTC)'.
+    """Convert a UTC ISO timestamp to 'HH:MM TZABBR' in the park's local timezone.
 
-    Uses the park's IANA timezone (Europe/Rome for Manzano, etc.) — NOT the
-    server's local time. This matters on Streamlit Cloud where the server runs
-    in UTC, so a naive astimezone() would always render as UTC and confuse a
-    user looking at the asset's local hour.
+    Always renders in the asset's local time (Europe/Rome for Manzano, etc.).
+    The TZ abbreviation (CEST/CET/PDT/CDT) makes the timezone explicit without
+    leaking UTC into the UI.
     """
     if not iso_utc:
         return "—"
@@ -1481,13 +1480,10 @@ def _local_time_str(iso_utc: str, tz_name: str = _park_tz_name) -> str:
         from zoneinfo import ZoneInfo
         dt_utc = _dt_loc.fromisoformat(iso_utc.replace("Z", "+00:00"))
         local = dt_utc.astimezone(ZoneInfo(tz_name))
-        local_str = local.strftime("%H:%M")
-        utc_str = dt_utc.strftime("%H:%M")
-        if local_str == utc_str:
-            return f"{utc_str} UTC"
-        return f"{local_str} local ({utc_str} UTC)"
+        abbr = local.strftime("%Z") or tz_name.split("/")[-1]
+        return f"{local.strftime('%H:%M')} {abbr}"
     except (ValueError, TypeError, Exception):
-        return iso_utc[:16].replace("T", " ")
+        return iso_utc[11:16] if len(iso_utc) >= 16 else iso_utc
 
 
 # Italian Conto Energia: dual revenue (state-paid FiT + wholesale market sale).
@@ -1656,9 +1652,16 @@ if live_zone:
     today_curve = fetch_today_curve(live_zone)
     if today_curve and today_curve.get("prices"):
         import datetime as _dt2
+        from zoneinfo import ZoneInfo as _ZI
+        _park_tz = _ZI(_park_tz_name)
         ts_list = today_curve["timestamps"]
         prices_list = today_curve["prices"]
-        x_dates = [_dt2.datetime.fromtimestamp(t, _dt2.timezone.utc) for t in ts_list]
+        # Convert UTC timestamps to park-local naive datetimes so Plotly renders
+        # the x-axis directly in the asset's local hours (no UTC labels anywhere).
+        x_dates = [
+            _dt2.datetime.fromtimestamp(t, _dt2.timezone.utc).astimezone(_park_tz).replace(tzinfo=None)
+            for t in ts_list
+        ]
 
         fig_today = go.Figure()
         # Negative-price area highlighted in red
@@ -1670,7 +1673,7 @@ if live_zone:
                 line=dict(color="#e8e4d6", width=1.6, shape="spline", smoothing=0.3),
                 fill="tozeroy",
                 fillcolor="rgba(232, 228, 214, 0.08)",
-                hovertemplate="%{x|%H:%M} UTC · %{y:,.1f} €/MWh<extra></extra>",
+                hovertemplate="%{x|%H:%M} · %{y:,.1f} €/MWh<extra></extra>",
                 name="Spot",
             )
         )
@@ -1678,12 +1681,12 @@ if live_zone:
         fig_today.add_hline(
             y=0, line_dash="dot", line_color="rgba(232, 228, 214, 0.3)", line_width=1
         )
-        # Mark current hour
+        # Mark current hour (in park local time)
         if live_spot:
-            now_dt = _dt2.datetime.now(_dt2.timezone.utc)
+            now_local = _dt2.datetime.now(_dt2.timezone.utc).astimezone(_park_tz).replace(tzinfo=None)
             fig_today.add_trace(
                 go.Scatter(
-                    x=[now_dt],
+                    x=[now_local],
                     y=[live_spot["price_eur_mwh"]],
                     mode="markers",
                     marker=dict(size=10, color="#84cc16", line=dict(color="#0a0a0a", width=2)),
@@ -1694,7 +1697,7 @@ if live_zone:
 
         fig_today.update_layout(
             title=dict(
-                text=f"Today's spot curve · zone {live_zone}",
+                text=f"Today's spot curve · zone {live_zone} · {_park_tz_name.split('/')[-1].replace('_', ' ')} time",
                 font=dict(color="#cbd5e1", size=12, family="Geist", weight=500),
                 x=0.0, xanchor="left", pad=dict(b=4),
             ),
