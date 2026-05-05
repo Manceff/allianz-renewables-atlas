@@ -64,6 +64,73 @@ def fetch_current_weather(lat: float, lon: float) -> dict[str, Any] | None:
     }
 
 
+def fetch_today_hourly_weather(lat: float, lon: float) -> dict[str, Any] | None:
+    """Fetch hourly weather for today (past hours have actuals, future is forecast).
+
+    Returns dict with parallel hourly arrays :
+        timestamps : list[str] ISO 8601, local timezone
+        ghi_w_m2 : list[float]
+        temp_c : list[float]
+        wind_ms : list[float]
+        is_past : list[bool] — whether the hour has already passed
+    """
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": "shortwave_radiation,temperature_2m,wind_speed_10m,is_day",
+        "timezone": "auto",
+        "forecast_days": 1,
+        "past_days": 0,
+    }
+    try:
+        resp = requests.get(API_URL, params=params, timeout=TIMEOUT_SEC)
+        resp.raise_for_status()
+        payload = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        logger.warning("Open-Meteo today-hourly fetch failed: %s", e)
+        return None
+
+    hourly = payload.get("hourly") or {}
+    times = hourly.get("time", [])
+    ghi = hourly.get("shortwave_radiation", [])
+    temp = hourly.get("temperature_2m", [])
+    wind = hourly.get("wind_speed_10m", [])
+    if not times or not ghi:
+        return None
+
+    # Determine which hours are "past" relative to local now
+    import datetime as _dt
+    tz = payload.get("timezone", "UTC")
+    # Open-Meteo returns local-zone strings (e.g. "2026-05-05T14:00")
+    # Compare to current time at the same location
+    current_time_str = (payload.get("current_weather") or {}).get("time", "")
+    if not current_time_str:
+        # Fallback: assume "now" by best-effort
+        now_local = _dt.datetime.utcnow()
+    else:
+        try:
+            now_local = _dt.datetime.fromisoformat(current_time_str)
+        except ValueError:
+            now_local = _dt.datetime.utcnow()
+
+    is_past = []
+    for t in times:
+        try:
+            t_dt = _dt.datetime.fromisoformat(t)
+            is_past.append(t_dt <= now_local)
+        except ValueError:
+            is_past.append(False)
+
+    return {
+        "timestamps": list(times),
+        "ghi_w_m2": [float(x or 0.0) for x in ghi],
+        "temp_c": [float(x or 20.0) for x in temp],
+        "wind_ms": [float(x or 1.0) for x in wind],
+        "is_past": is_past,
+        "timezone": tz,
+    }
+
+
 def estimate_current_output_mw(
     capacity_mwp: float,
     ghi_w_m2: float,

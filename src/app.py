@@ -1079,12 +1079,12 @@ st.markdown(
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# REVENUE · YEAR 2023 — historical production × historical prices
+# Common pricing/FiT lookup — hoisted here so Live section (downstream)
+# can use is_fit_locked, fit_price, etc. The full revenue calc runs later.
 # ---------------------------------------------------------------------------
 
 zone = get_zone(selected_row["country"], park_id=selected_park_id)
 fallback_price = get_fallback_price(selected_park_id)
-# Look up FiT info on the raw park model
 from src.lib.parks_loader import get_park_by_id as _get_park_for_fit2
 _park_obj_for_fit = _get_park_for_fit2(selected_park_id)
 fit_price = _park_obj_for_fit.fit_strike_price_eur_mwh if _park_obj_for_fit else None
@@ -1092,240 +1092,175 @@ fit_scheme = _park_obj_for_fit.fit_scheme if _park_obj_for_fit else None
 fit_expiry = _park_obj_for_fit.fit_expiry_year if _park_obj_for_fit else None
 is_fit_locked = fit_price is not None
 
-revenue_metrics: dict = {}
-revenue_source = ""
-period_prices: dict | None = None
-fit_revenue_eur = 0.0
-spot_revenue_eur = 0.0
-spot_realized_price = None  # production-weighted spot avg (for cannibalisation calc)
-spot_simple_avg = None      # time-weighted spot avg (for day-ahead reference)
-spot_hours_covered = 0
+# ---------------------------------------------------------------------------
+# SATELLITE VIEW — Esri imagery zoomed on the panels
+# ---------------------------------------------------------------------------
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def _fetch_period_prices_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
-    return fetch_period_prices(zone, start_iso, end_iso)
+import re as _re_sat
+from src.lib.parks_loader import get_park_by_id as _get_park_by_id
+_sites_match = _re_sat.search(r"\((\d+)\s+sites?", selected_row["name"])
+_sites_count = int(_sites_match.group(1)) if _sites_match else 1
 
-# Fetch zonal spot prices (used both for spot-only revenue and FiT+spot dual-revenue)
-if zone:
-    period_prices = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
+# Look up the raw park model to access sub_sites if present
+_park_model = _get_park_by_id(selected_park_id)
+_sub_sites_payload = None
+_sub_site_overrides_for_park: dict[str, list[float]] = {}
+if _park_model and _park_model.sub_sites:
+    _all_sub_overrides = _load_sub_site_overrides()
+    _sub_site_overrides_for_park = _all_sub_overrides.get(selected_park_id, {})
+    _sub_sites_payload = []
+    for s in _park_model.sub_sites:
+        _ov = _sub_site_overrides_for_park.get(s.name)
+        _lat = float(_ov[0]) if _ov else s.lat
+        _lon = float(_ov[1]) if _ov else s.lon
+        _sub_sites_payload.append({
+            "name": s.name,
+            "county": s.county,
+            "capacity_mw": s.capacity_mw,
+            "lat": _lat,
+            "lon": _lon,
+            "is_overridden": _ov is not None,
+            "original_lat": s.lat,
+            "original_lon": s.lon,
+        })
 
-# Priority 1 : Italian FiT-locked asset (Conto Energia >1 MW) — DUAL revenue:
-#   incentive tariff (FiT) PAID BY STATE on every MWh
-#   PLUS market sale of energy at zonal hourly spot price
-# Total = FiT × prod + spot_h × prod_h (each hour)
-if is_fit_locked:
-    hk = hourly_data["hourly_production_kwh"]
-    total_kwh = sum(hk)
-    fit_revenue_eur = (total_kwh / 1000.0) * fit_price  # MWh × €/MWh
-
-    if period_prices and period_prices.get("prices_eur_mwh"):
-        # Map hourly production to spot prices via timestamp matching
-        spot_ts = period_prices["timestamps"]
-        spot_p = period_prices["prices_eur_mwh"]
-        spot_lookup = {ts: p for ts, p in zip(spot_ts, spot_p) if p is not None}
-        prod_ts_iso = hourly_data["timestamps"]
-        import datetime as _dtfit
-        valid_spot_prices = []
-        spot_weighted_sum = 0.0
-        spot_weighted_prod_kwh = 0.0
-        for i, ts_iso in enumerate(prod_ts_iso):
-            if i >= len(hk): break
-            try:
-                ts_int = int(_dtfit.datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp())
-                ts_hour = ts_int - (ts_int % 3600)
-                p = spot_lookup.get(ts_hour)
-                if p is not None:
-                    spot_weighted_sum += hk[i] / 1000.0 * p  # MWh × €/MWh
-                    spot_weighted_prod_kwh += hk[i]
-                    valid_spot_prices.append(p)
-            except (ValueError, AttributeError):
-                continue
-        spot_revenue_eur = spot_weighted_sum
-        spot_hours_covered = len(valid_spot_prices)
-        if spot_weighted_prod_kwh > 0:
-            spot_realized_price = spot_weighted_sum / (spot_weighted_prod_kwh / 1000.0)
-        if valid_spot_prices:
-            spot_simple_avg = sum(valid_spot_prices) / len(valid_spot_prices)
-
-    total_revenue_eur = fit_revenue_eur + spot_revenue_eur
-    total_mwh = total_kwh / 1000.0
-    revenue_metrics = {
-        "annual_revenue_eur": total_revenue_eur,
-        "effective_price_eur_mwh": (total_revenue_eur / total_mwh) if total_mwh else 0.0,
-        "avg_dayahead_price_eur_mwh": spot_simple_avg or 0.0,
-        "cannibalization_pct": (
-            ((spot_realized_price - spot_simple_avg) / spot_simple_avg * 100.0)
-            if (spot_realized_price is not None and spot_simple_avg)
-            else 0.0
-        ),
-    }
-    coverage_pct = (spot_hours_covered / max(len(hk), 1)) * 100.0
-    revenue_source = (
-        f"FiT €{fit_price:.0f}/MWh ({fit_scheme.split('—')[0].strip() if fit_scheme else 'FiT'}, expires {fit_expiry}) "
-        f"+ market sale at {zone or 'zone N/A'} hourly spot ({spot_hours_covered:,}/{len(hk):,} hours covered, {coverage_pct:.0f}%)"
+if _sub_sites_payload:
+    _sat_caption = (
+        _park_model.sub_sites_caption
+        or f"Multi-site portfolio · {len(_sub_sites_payload)} known sub-sites — markers at commune-level GPS."
     )
-
-# Priority 2 : zonal hourly day-ahead prices only (merchant solar, no FiT)
-elif zone and period_prices and period_prices.get("prices_eur_mwh"):
-    revenue_metrics = compute_revenue_metrics(
-        hourly_production_kwh=hourly_data["hourly_production_kwh"],
-        hourly_prices_eur_mwh=period_prices["prices_eur_mwh"],
+elif _sites_count > 1:
+    _sat_caption = (
+        f"Multi-site portfolio · {_sites_count} sites distributed in this region. "
+        f"Exact addresses are not public — markers are illustrative only, "
+        f"placed inside a 25-km radius around the portfolio centroid."
     )
-    revenue_source = f"hourly day-ahead zone {zone}"
-
-# Priority 3 : flat fallback proxy (US ERCOT/CAISO — PPA-effective approximation)
-if not revenue_metrics and fallback_price is not None:
-    flat_prices = [fallback_price] * len(hourly_data["hourly_production_kwh"])
-    revenue_metrics = compute_revenue_metrics(
-        hourly_production_kwh=hourly_data["hourly_production_kwh"],
-        hourly_prices_eur_mwh=flat_prices,
-    )
-    revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
-
-_revenue_caption = revenue_source or f"Zone {zone or '—'} not available — revenue cannot be computed."
+else:
+    _sat_caption = "Esri World Imagery (Maxar, Earthstar Geographics) at the park's GPS coordinates."
 
 st.markdown(
     f"""
     <div class="section-header">
-      <span class="section-label">Revenue · last 12 months</span>
-      <span class="section-caption">
-        Hourly production × hourly day-ahead spot price for each of the 8&nbsp;760 hours
-        in the rolling year ({T12M_START.isoformat()} → {T12M_END.isoformat()}).
-        Source : <b>{_revenue_caption}</b>.
-      </span>
+      <span class="section-label">Satellite view</span>
+      <span class="section-caption">{_sat_caption}</span>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-r1, r2, r3, r4 = st.columns(4)
+# Focus selector for portfolios with real sub_sites
+_focus_key = f"sat-focus-{selected_park_id}"
+_focused_idx: int | None = st.session_state.get(_focus_key)
+if _sub_sites_payload:
+    _per_row = 6
+    _items: list[tuple[str, int | None]] = [("◉ Overview", None)] + [
+        (s["name"], i) for i, s in enumerate(_sub_sites_payload)
+    ]
+    for _row_start in range(0, len(_items), _per_row):
+        _row = _items[_row_start : _row_start + _per_row]
+        _cols = st.columns(_per_row)
+        for _ci, (_label, _idx_val) in enumerate(_row):
+            _btn_key = f"focus-btn-{selected_park_id}-{_idx_val if _idx_val is not None else 'all'}"
+            _is_active = _focused_idx == _idx_val
+            if _cols[_ci].button(
+                _label,
+                key=_btn_key,
+                use_container_width=True,
+                type=("primary" if _is_active else "secondary"),
+            ):
+                st.session_state[_focus_key] = _idx_val
+                st.rerun()
 
-if revenue_metrics:
-    r1.metric(
-        "Total revenue (T12M)",
-        f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
-        help=(
-            f"Total euros earned over the last 12 months. Italian utility-scale plants (>1 MW) under "
-            f"Conto Energia receive a DUAL revenue: (1) State-paid feed-in incentive at €{fit_price:.0f}/MWh on every "
-            f"MWh produced (until {fit_expiry}), PLUS (2) sale of the same energy on the wholesale market at zonal "
-            f"hourly spot price. Total = FiT × production + Σ(production_h × spot_h). "
-            f"FiT portion: €{fit_revenue_eur/1_000_000:.2f} M (locked). Spot sale portion: €{spot_revenue_eur/1_000_000:.2f} M (variable)."
-            if is_fit_locked else
-            "Total euros earned over the last 12 months. "
-            "Computed by summing, for each hour : production_MWh × spot_price_EUR_per_MWh. "
-            "Captures actual market conditions hour by hour, including negative spot prices and the regulatory floor at 0 €/MWh in Italy."
-        ),
-    )
-    r2.metric(
-        "Effective price (T12M)" + (" — FiT+spot" if is_fit_locked else ""),
-        f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
-        help=(
-            f"FiT strike + production-weighted realised spot. = Total revenue / total production_MWh. "
-            f"Breakdown: €{fit_price:.0f}/MWh fixed FiT incentive (paid by State, until {fit_expiry}) "
-            + (f"+ €{spot_realized_price:.1f}/MWh from market sale (production-weighted = post-cannibalisation)." if spot_realized_price is not None else "+ market sale data unavailable.")
-            if is_fit_locked else
-            "The price actually realised on each MWh sold, weighted by when production happened. "
-            "Formula : total_revenue / total_production_mwh. "
-            "Differs from the simple market average because the park doesn't produce evenly — it produces a lot at midday "
-            "(when prices are pushed down by solar oversupply) and nothing at night (when prices spike). "
-            "This is the asset's true revenue per MWh — what really lands on the cash flow."
-        ),
-    )
-    if is_fit_locked:
-        # Show market sale spot avg + cannibalisation (applies to spot portion only)
-        if spot_simple_avg is not None and spot_realized_price is not None:
-            r3.metric(
-                "Spot day-ahead avg",
-                f"{spot_simple_avg:.1f} €/MWh",
-                delta=f"realised on prod: {spot_realized_price:.1f}",
-                delta_color="off",
-                help=(
-                    f"Simple time-average of zone {zone} hourly day-ahead spot prices over the {spot_hours_covered:,} hours covered. "
-                    f"The 'realised on prod' delta shows the production-weighted average ({spot_realized_price:.1f} €/MWh) — "
-                    f"what the plant actually earned per MWh on the SPOT portion of its revenue (not counting FiT). "
-                    "Lower than the simple average because solar concentrates production in low-price hours (cannibalisation)."
-                ),
-            )
-            cann_spot = (spot_realized_price - spot_simple_avg) / spot_simple_avg * 100.0
-            r4.metric(
-                "Spot cannibalisation",
-                f"{cann_spot:+.1f} %",
-                help=(
-                    "Cannibalisation on the SPOT portion of revenue only. "
-                    "FiT portion (~€" + f"{fit_price:.0f}" + "/MWh) is locked and NOT cannibalised — paid on every MWh regardless of hour. "
-                    f"Spot side captures Italian solar penetration effect: realised €{spot_realized_price:.1f}/MWh vs simple avg €{spot_simple_avg:.1f}/MWh. "
-                    "When FiT expires, total revenue drops to spot-only and cannibalisation becomes the entire risk."
-                ),
-            )
-        else:
-            r3.metric("Spot day-ahead avg", "—", help=(
-                f"Wholesale spot data unavailable for zone {zone or '—'} on this T12M window. "
-                "energy-charts.info has limited Italian zone coverage (IT-North data only from Oct 2025). "
-                "Total revenue shown is FiT-only — actual revenue is higher (FiT + market sale) but missing market data."
-            ))
-            r4.metric("Spot cannibalisation", "N/A", help="Spot data unavailable.")
-    else:
-        r3.metric(
-            "Day-ahead avg (T12M)",
-            f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
-            help=(
-                "Simple arithmetic mean of all 8 760 hourly day-ahead market prices on the asset's bidding zone. "
-                "Reference market level — what the typical hour was priced at on average. "
-                "An asset would earn this much per MWh ONLY if it produced flat across all hours. "
-                "Solar parks earn less because their generation is concentrated in low-price hours."
-            ),
-        )
-        cann = revenue_metrics["cannibalization_pct"]
-        r4.metric(
-            "Cannibalisation (T12M)",
-            f"{cann:+.1f} %",
-            help=(
-                "Difference between the effective sale price and the day-ahead average, in % of the average. "
-                "Formula : (effective − day_ahead_avg) / day_ahead_avg. "
-                "Negative = the asset earns less than the market average per MWh because solar concentrates production at midday "
-                "when oversupply pushes prices down. "
-                "Worsens with the solar penetration rate of the zone — Iberia 2026 typically sees -50 to -80% cannibalisation. "
-                "The risk #1 of merchant solar today, and the main argument for PPAs, batteries, and east/west tracking."
-            ),
-        )
-else:
-    r1.metric("Total revenue (T12M)", "—", help="No price data available for this zone over this window.")
-    r2.metric("Effective sale price (T12M)", "—")
-    r3.metric("Day-ahead avg (T12M)", "—")
-    r4.metric("Cannibalisation (T12M)", "—")
+# When a sub-site is focused, switch to the coord_picker component (dblclick → save).
+# Otherwise render the full overview map with all 17 markers.
+if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_sub_sites_payload):
+    _fs = _sub_sites_payload[_focused_idx]
+    from src.components.coord_picker import coord_picker as _coord_picker
 
-# Source caption
-if reported:
-    src_url = reported.get("source_url", "")
-    src_year = reported.get("year", "—")
-    src_note = reported.get("note", "")
+    _picker_label = f"{_fs['name']} · Co. {_fs['county']} · {_fs['capacity_mw']:.1f} MW"
+    _new_coords = _coord_picker(
+        lat=float(_fs["lat"]),
+        lon=float(_fs["lon"]),
+        label=_picker_label,
+        height=420,
+        key=f"sub-coord-picker-{selected_park_id}-{_focused_idx}",
+    )
+    if _new_coords:
+        _new_lat, _new_lon = float(_new_coords[0]), float(_new_coords[1])
+        _existing = _sub_site_overrides_for_park.get(_fs["name"])
+        _is_new_save = (not _existing) or (
+            abs(_existing[0] - _new_lat) > 1e-5 or abs(_existing[1] - _new_lon) > 1e-5
+        )
+        if _is_new_save:
+            _save_sub_site_override(selected_park_id, _fs["name"], _new_lat, _new_lon)
+            st.cache_data.clear()
+            st.success(f"Position saved for {_fs['name']} → {_new_lat:.5f}, {_new_lon:.5f}")
+            st.rerun()
+
+    # Focus banner with site context + quick links + reset action
+    _gmaps = f"https://www.google.com/maps/@{_fs['lat']},{_fs['lon']},17z/data=!3m1!1e3"
+    _osm = f"https://www.openstreetmap.org/?mlat={_fs['lat']}&mlon={_fs['lon']}#map=16/{_fs['lat']}/{_fs['lon']}"
+    _overpass = (
+        "https://overpass-turbo.eu/?Q="
+        + f"%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0Anwr%5B%22power%22%3D%22plant%22%5D%5B%22plant%3Asource%22%3D%22solar%22%5D%28around%3A8000%2C{_fs['lat']}%2C{_fs['lon']}%29%3B%0Aout+geom%3B"
+    )
+    _override_tag = (
+        '<span style="color:#7dd3fc; font-size:0.7rem; margin-left:8px; '
+        'background:rgba(125,211,252,0.12); padding:1px 6px; border-radius:3px;">corrected</span>'
+        if _fs["is_overridden"] else ""
+    )
     st.markdown(
         f"""
-        <div class="source-caption">
-          <span class="src-label">Reported source</span>
-          {float(reported['annual_mwh']):,.0f} MWh · {src_year} ·
-          <a href="{src_url}" target="_blank">{src_url[:80]}{'…' if len(src_url) > 80 else ''}</a>
-          <div class="src-note">{src_note}</div>
+        <div style="
+            margin: 8px 0 4px; padding: 10px 14px;
+            background: rgba(132, 204, 22, 0.05);
+            border: 1px solid rgba(132, 204, 22, 0.25);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+            color: #cbd5e1; letter-spacing: 0.02em;">
+          <span style="color: #84cc16; font-weight: 600;">▸ {_fs['name']}</span>{_override_tag}
+          &nbsp;·&nbsp; Co. {_fs['county']} &nbsp;·&nbsp; {_fs['capacity_mw']:.1f} MW &nbsp;·&nbsp;
+          <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs['lat']}, {_fs['lon']}</code>
+          <div style="margin-top: 6px; font-size: 0.72rem;">
+            <span style="color: #84cc16;">▸ Double-click on the panels to save new coords.</span>
+            <a href="{_gmaps}" target="_blank" style="color: #7dd3fc; margin-left: 14px; margin-right: 14px;">Open in Google Maps ↗</a>
+            <a href="{_osm}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">OSM ↗</a>
+            <a href="{_overpass}" target="_blank" style="color: #7dd3fc;">Overpass query ↗</a>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    if _fs["is_overridden"]:
+        _r_cols = st.columns([5, 1])
+        _r_cols[0].caption(
+            f"Original commune coords: {_fs['original_lat']:.6f}, {_fs['original_lon']:.6f} — current is corrected."
+        )
+        if _r_cols[1].button(
+            "Reset to original",
+            key=f"reset-coord-{selected_park_id}-{_focused_idx}",
+            use_container_width=True,
+        ):
+            _delete_sub_site_override(selected_park_id, _fs["name"])
+            st.cache_data.clear()
+            st.info(f"Position reset to original for {_fs['name']}")
+            st.rerun()
+
 else:
-    st.markdown(
-        """
-        <div class="source-caption">
-          <span class="src-label">Reported source</span>
-          No public production figure identified for this park — delta cannot be computed.
-        </div>
-        """,
-        unsafe_allow_html=True,
+    # Overview mode — render all sub-sites at once
+    components.html(
+        _build_satellite_html(
+            lat=float(selected_row["lat"]),
+            lon=float(selected_row["lon"]),
+            label=selected_row["name"],
+            sites_count=_sites_count,
+            sub_sites=_sub_sites_payload,
+            focused_sub_idx=None,
+        ),
+        height=360,
+        scrolling=False,
     )
-
-st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
-
-# ---------------------------------------------------------------------------
-# Daily output chart — single fluid line, dated year DATA_YEAR
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # LIVE STATUS — current weather + estimated output + current spot price
@@ -1585,252 +1520,100 @@ if live_zone:
 st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# SATELLITE VIEW — Esri imagery zoomed on the panels
-# ---------------------------------------------------------------------------
-
-import re as _re_sat
-from src.lib.parks_loader import get_park_by_id as _get_park_by_id
-_sites_match = _re_sat.search(r"\((\d+)\s+sites?", selected_row["name"])
-_sites_count = int(_sites_match.group(1)) if _sites_match else 1
-
-# Look up the raw park model to access sub_sites if present
-_park_model = _get_park_by_id(selected_park_id)
-_sub_sites_payload = None
-_sub_site_overrides_for_park: dict[str, list[float]] = {}
-if _park_model and _park_model.sub_sites:
-    _all_sub_overrides = _load_sub_site_overrides()
-    _sub_site_overrides_for_park = _all_sub_overrides.get(selected_park_id, {})
-    _sub_sites_payload = []
-    for s in _park_model.sub_sites:
-        _ov = _sub_site_overrides_for_park.get(s.name)
-        _lat = float(_ov[0]) if _ov else s.lat
-        _lon = float(_ov[1]) if _ov else s.lon
-        _sub_sites_payload.append({
-            "name": s.name,
-            "county": s.county,
-            "capacity_mw": s.capacity_mw,
-            "lat": _lat,
-            "lon": _lon,
-            "is_overridden": _ov is not None,
-            "original_lat": s.lat,
-            "original_lon": s.lon,
-        })
-
-if _sub_sites_payload:
-    _sat_caption = (
-        _park_model.sub_sites_caption
-        or f"Multi-site portfolio · {len(_sub_sites_payload)} known sub-sites — markers at commune-level GPS."
-    )
-elif _sites_count > 1:
-    _sat_caption = (
-        f"Multi-site portfolio · {_sites_count} sites distributed in this region. "
-        f"Exact addresses are not public — markers are illustrative only, "
-        f"placed inside a 25-km radius around the portfolio centroid."
-    )
-else:
-    _sat_caption = "Esri World Imagery (Maxar, Earthstar Geographics) at the park's GPS coordinates."
-
-st.markdown(
-    f"""
-    <div class="section-header">
-      <span class="section-label">Satellite view</span>
-      <span class="section-caption">{_sat_caption}</span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Focus selector for portfolios with real sub_sites
-_focus_key = f"sat-focus-{selected_park_id}"
-_focused_idx: int | None = st.session_state.get(_focus_key)
-if _sub_sites_payload:
-    _per_row = 6
-    _items: list[tuple[str, int | None]] = [("◉ Overview", None)] + [
-        (s["name"], i) for i, s in enumerate(_sub_sites_payload)
-    ]
-    for _row_start in range(0, len(_items), _per_row):
-        _row = _items[_row_start : _row_start + _per_row]
-        _cols = st.columns(_per_row)
-        for _ci, (_label, _idx_val) in enumerate(_row):
-            _btn_key = f"focus-btn-{selected_park_id}-{_idx_val if _idx_val is not None else 'all'}"
-            _is_active = _focused_idx == _idx_val
-            if _cols[_ci].button(
-                _label,
-                key=_btn_key,
-                use_container_width=True,
-                type=("primary" if _is_active else "secondary"),
-            ):
-                st.session_state[_focus_key] = _idx_val
-                st.rerun()
-
-# When a sub-site is focused, switch to the coord_picker component (dblclick → save).
-# Otherwise render the full overview map with all 17 markers.
-if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_sub_sites_payload):
-    _fs = _sub_sites_payload[_focused_idx]
-    from src.components.coord_picker import coord_picker as _coord_picker
-
-    _picker_label = f"{_fs['name']} · Co. {_fs['county']} · {_fs['capacity_mw']:.1f} MW"
-    _new_coords = _coord_picker(
-        lat=float(_fs["lat"]),
-        lon=float(_fs["lon"]),
-        label=_picker_label,
-        height=420,
-        key=f"sub-coord-picker-{selected_park_id}-{_focused_idx}",
-    )
-    if _new_coords:
-        _new_lat, _new_lon = float(_new_coords[0]), float(_new_coords[1])
-        _existing = _sub_site_overrides_for_park.get(_fs["name"])
-        _is_new_save = (not _existing) or (
-            abs(_existing[0] - _new_lat) > 1e-5 or abs(_existing[1] - _new_lon) > 1e-5
-        )
-        if _is_new_save:
-            _save_sub_site_override(selected_park_id, _fs["name"], _new_lat, _new_lon)
-            st.cache_data.clear()
-            st.success(f"Position saved for {_fs['name']} → {_new_lat:.5f}, {_new_lon:.5f}")
-            st.rerun()
-
-    # Focus banner with site context + quick links + reset action
-    _gmaps = f"https://www.google.com/maps/@{_fs['lat']},{_fs['lon']},17z/data=!3m1!1e3"
-    _osm = f"https://www.openstreetmap.org/?mlat={_fs['lat']}&mlon={_fs['lon']}#map=16/{_fs['lat']}/{_fs['lon']}"
-    _overpass = (
-        "https://overpass-turbo.eu/?Q="
-        + f"%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0Anwr%5B%22power%22%3D%22plant%22%5D%5B%22plant%3Asource%22%3D%22solar%22%5D%28around%3A8000%2C{_fs['lat']}%2C{_fs['lon']}%29%3B%0Aout+geom%3B"
-    )
-    _override_tag = (
-        '<span style="color:#7dd3fc; font-size:0.7rem; margin-left:8px; '
-        'background:rgba(125,211,252,0.12); padding:1px 6px; border-radius:3px;">corrected</span>'
-        if _fs["is_overridden"] else ""
-    )
-    st.markdown(
-        f"""
-        <div style="
-            margin: 8px 0 4px; padding: 10px 14px;
-            background: rgba(132, 204, 22, 0.05);
-            border: 1px solid rgba(132, 204, 22, 0.25);
-            border-radius: 8px;
-            font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
-            color: #cbd5e1; letter-spacing: 0.02em;">
-          <span style="color: #84cc16; font-weight: 600;">▸ {_fs['name']}</span>{_override_tag}
-          &nbsp;·&nbsp; Co. {_fs['county']} &nbsp;·&nbsp; {_fs['capacity_mw']:.1f} MW &nbsp;·&nbsp;
-          <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs['lat']}, {_fs['lon']}</code>
-          <div style="margin-top: 6px; font-size: 0.72rem;">
-            <span style="color: #84cc16;">▸ Double-click on the panels to save new coords.</span>
-            <a href="{_gmaps}" target="_blank" style="color: #7dd3fc; margin-left: 14px; margin-right: 14px;">Open in Google Maps ↗</a>
-            <a href="{_osm}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">OSM ↗</a>
-            <a href="{_overpass}" target="_blank" style="color: #7dd3fc;">Overpass query ↗</a>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if _fs["is_overridden"]:
-        _r_cols = st.columns([5, 1])
-        _r_cols[0].caption(
-            f"Original commune coords: {_fs['original_lat']:.6f}, {_fs['original_lon']:.6f} — current is corrected."
-        )
-        if _r_cols[1].button(
-            "Reset to original",
-            key=f"reset-coord-{selected_park_id}-{_focused_idx}",
-            use_container_width=True,
-        ):
-            _delete_sub_site_override(selected_park_id, _fs["name"])
-            st.cache_data.clear()
-            st.info(f"Position reset to original for {_fs['name']}")
-            st.rerun()
-
-else:
-    # Overview mode — render all sub-sites at once
-    components.html(
-        _build_satellite_html(
-            lat=float(selected_row["lat"]),
-            lon=float(selected_row["lon"]),
-            label=selected_row["name"],
-            sites_count=_sites_count,
-            sub_sites=_sub_sites_payload,
-            focused_sub_idx=None,
-        ),
-        height=360,
-        scrolling=False,
-    )
-
-# ---------------------------------------------------------------------------
-# HISTORICAL · last 12 months (T12M rolling)
+# PRODUCTION TODAY — cumulative MWh since sunrise
 # ---------------------------------------------------------------------------
 
 st.markdown(
-    f"""
+    """
     <div class="section-header">
-      <span class="section-label">Historical · last 12 months</span>
+      <span class="section-label">Production today</span>
       <span class="section-caption">
-        Rolling window <b>{T12M_START.isoformat()} → {T12M_END.isoformat()}</b>.
-        Full pvlib reconstruction (Open-Meteo Archive 5-day lag, Hay-Davies POA,
-        Sandia cell temp, PVWatts DC, inverter clipping, 14% losses).
-        Validated within ±2-5% of PVGIS-grade output.
+        Hourly output reconstructed from Open-Meteo today's GHI + temp at the park's coords,
+        passed through the same pvlib-style estimator used for the live MW. Cumulative MWh
+        since sunrise, plus the hour-by-hour bars so you can see today's curve develop.
       </span>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-m1, m2, m3, m4 = st.columns(4)
+@st.cache_data(ttl=600, show_spinner=False)
+def _fetch_today_hourly_cached(lat: float, lon: float) -> dict | None:
+    from src.lib.live_weather import fetch_today_hourly_weather
+    return fetch_today_hourly_weather(lat, lon)
 
-# J-1 output with year-on-year comparison
-yest_delta_label = ""
-if yest_prev_mwh and yest_prev_mwh > 0.01:
-    d_yest = (yesterday_mwh - yest_prev_mwh) / yest_prev_mwh * 100.0
-    yest_delta_label = f"{d_yest:+.0f}% vs same day −1 year"
+_today_hw = _fetch_today_hourly_cached(float(selected_row["lat"]), float(selected_row["lon"]))
+if _today_hw and _today_hw.get("timestamps"):
+    from src.lib.live_weather import estimate_current_output_mw as _est_mw
+    _ts_today = _today_hw["timestamps"]
+    _ghi_today = _today_hw["ghi_w_m2"]
+    _temp_today = _today_hw["temp_c"]
+    _is_past = _today_hw["is_past"]
+    _cap = float(selected_row["capacity_mwp"])
+    _hourly_mw_today = []
+    for i in range(len(_ts_today)):
+        if _is_past[i]:
+            mw = _est_mw(capacity_mwp=_cap, ghi_w_m2=_ghi_today[i], temp_c=_temp_today[i])
+            _hourly_mw_today.append(mw)
+        else:
+            _hourly_mw_today.append(0.0)
+    _cum_mwh_today = sum(_hourly_mw_today)  # MW × 1h = MWh
+    _sunrise_idx = next((i for i, mw in enumerate(_hourly_mw_today) if mw > 0.05), None)
+    _sunrise_label = _ts_today[_sunrise_idx][-5:] if _sunrise_idx is not None else "—"
+    _hours_since_sunrise = sum(1 for i, mw in enumerate(_hourly_mw_today) if i >= (_sunrise_idx or 0) and _is_past[i])
 
-m1.metric(
-    f"Output {_yest.strftime('%d %b')}",
-    f"{yesterday_mwh:,.1f} MWh",
-    delta=yest_delta_label or None,
-    delta_color="off",
-    help=(
-        f"Production for the last full day available ({_yest.isoformat()}). "
-        f"The Open-Meteo Archive lag means today is incomplete; we display the latest closed day. "
-        f"Same day in {_yest.year - 1}: {yest_prev_mwh:,.1f} MWh." if yest_prev_mwh else
-        f"Production for {_yest.isoformat()}, the last fully-available day in the Open-Meteo Archive."
-    ),
-)
-m2.metric(
-    "T12M output",
-    f"{annual_mwh:,.0f} MWh",
-    help=f"Total production over the rolling 365-day window {T12M_START.isoformat()} → {T12M_END.isoformat()}.",
-)
-m3.metric(
-    "Capacity factor (T12M)",
-    f"{cf_annual:.1f} %",
-    help=(
-        "Capacity factor = annual production / (nameplate capacity × 8 760 h). "
-        "Measures how much of the theoretical maximum the asset achieves over the year. "
-        "European solar benchmarks: 11-13% (northern), 15-18% (Iberia), 19-21% (sun-belt US/Spain south)."
-    ),
-)
-
-if reported:
-    m4.metric(
-        "Δ vs operator press release",
-        f"{delta_pct:+.1f} %",
-        delta=SEVERITY_LABELS[delta_severity],
+    pt1, pt2, pt3 = st.columns([1, 1, 2])
+    pt1.metric(
+        "Output today",
+        f"{_cum_mwh_today:.1f} MWh",
+        help=(
+            f"Cumulative production since sunrise ({_sunrise_label}). "
+            f"Reconstructed from Open-Meteo hourly GHI/temp at the park\'s coords using the "
+            "same pvlib-style estimator as the live MW metric. Resets at midnight local time."
+        ),
+    )
+    pt2.metric(
+        "Sunrise (local)",
+        _sunrise_label,
+        delta=f"{_hours_since_sunrise} h ago" if _hours_since_sunrise else None,
         delta_color="off",
-        help=(
-            f"Compares our T12M reconstruction ({annual_mwh:,.0f} MWh) to the operator-reported figure "
-            f"({float(reported['annual_mwh']):,.0f} MWh, {reported['year']}). "
-            "Reasons for non-zero delta: panel degradation since commissioning, real losses different from 14%, "
-            "press-release rounding, geometry assumptions different from reality."
-        ),
+        help="Local timezone of the park. First hour where estimated output > 0.05 MW today.",
     )
+    # Bar chart of today's hourly output
+    import pandas as _pdpt
+    _df_today = _pdpt.DataFrame({
+        "hour": [t[-5:] for t in _ts_today],
+        "mw": _hourly_mw_today,
+        "is_past": _is_past,
+    })
+    fig_today_prod = go.Figure()
+    fig_today_prod.add_trace(go.Bar(
+        x=_df_today["hour"],
+        y=[mw if past else 0 for mw, past in zip(_df_today["mw"], _df_today["is_past"])],
+        marker=dict(color="#e8e4d6"),
+        name="Hours past",
+        hovertemplate="%{x} · %{y:.2f} MW<extra></extra>",
+    ))
+    fig_today_prod.update_layout(
+        title=dict(
+            text="Today\'s hourly output (estimated)",
+            font=dict(color="#cbd5e1", size=12, family="Geist", weight=500),
+            x=0.0, xanchor="left", pad=dict(b=4),
+        ),
+        height=160,
+        margin=dict(l=0, r=0, t=32, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False, tickfont=dict(color="#7a7464", size=9, family="JetBrains Mono")),
+        yaxis=dict(gridcolor="rgba(232, 228, 214, 0.06)", tickfont=dict(color="#7a7464", size=9, family="JetBrains Mono"), title=None, ticksuffix=" MW"),
+        showlegend=False,
+        hoverlabel=dict(bgcolor="rgba(13, 13, 13, 0.95)", bordercolor="rgba(232, 228, 214, 0.4)", font=dict(color="#f1f5f9", family="JetBrains Mono", size=11)),
+    )
+    pt3.plotly_chart(fig_today_prod, width="stretch", config={"displayModeBar": False})
 else:
-    m4.metric(
-        "Δ vs operator press release",
-        "—",
-        help=(
-            "No public annual production figure was identified in the operator's press release for this park. "
-            "Common for small / multi-site portfolios."
-        ),
-    )
+    st.info("Today\'s hourly weather unavailable — Production today section requires Open-Meteo forecast endpoint.")
 
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # TIME SERIES · year 2023
 # ---------------------------------------------------------------------------
@@ -1969,238 +1752,346 @@ fig_monthly.update_layout(
 st.plotly_chart(fig_monthly, width="stretch", config={"displayModeBar": False})
 
 # ---------------------------------------------------------------------------
-# RECENT VS PRIOR YEAR · Recent N days vs {DATA_YEAR} same period
+# REVENUE · YEAR 2023 — historical production × historical prices
 # ---------------------------------------------------------------------------
 
-_baseline_year_for_backtest = T12M_END.year - 1
+# zone, fallback_price, fit_*, is_fit_locked already hoisted above (before Live section)
+revenue_metrics: dict = {}
+revenue_source = ""
+period_prices: dict | None = None
+fit_revenue_eur = 0.0
+spot_revenue_eur = 0.0
+spot_realized_price = None  # production-weighted spot avg (for cannibalisation calc)
+spot_simple_avg = None      # time-weighted spot avg (for day-ahead reference)
+spot_hours_covered = 0
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_period_prices_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
+    return fetch_period_prices(zone, start_iso, end_iso)
+
+# Fetch zonal spot prices (used both for spot-only revenue and FiT+spot dual-revenue)
+if zone:
+    period_prices = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
+
+# Priority 1 : Italian FiT-locked asset (Conto Energia >1 MW) — DUAL revenue:
+#   incentive tariff (FiT) PAID BY STATE on every MWh
+#   PLUS market sale of energy at zonal hourly spot price
+# Total = FiT × prod + spot_h × prod_h (each hour)
+if is_fit_locked:
+    hk = hourly_data["hourly_production_kwh"]
+    total_kwh = sum(hk)
+    fit_revenue_eur = (total_kwh / 1000.0) * fit_price  # MWh × €/MWh
+
+    if period_prices and period_prices.get("prices_eur_mwh"):
+        # Map hourly production to spot prices via timestamp matching
+        spot_ts = period_prices["timestamps"]
+        spot_p = period_prices["prices_eur_mwh"]
+        spot_lookup = {ts: p for ts, p in zip(spot_ts, spot_p) if p is not None}
+        prod_ts_iso = hourly_data["timestamps"]
+        import datetime as _dtfit
+        valid_spot_prices = []
+        spot_weighted_sum = 0.0
+        spot_weighted_prod_kwh = 0.0
+        for i, ts_iso in enumerate(prod_ts_iso):
+            if i >= len(hk): break
+            try:
+                ts_int = int(_dtfit.datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp())
+                ts_hour = ts_int - (ts_int % 3600)
+                p = spot_lookup.get(ts_hour)
+                if p is not None:
+                    spot_weighted_sum += hk[i] / 1000.0 * p  # MWh × €/MWh
+                    spot_weighted_prod_kwh += hk[i]
+                    valid_spot_prices.append(p)
+            except (ValueError, AttributeError):
+                continue
+        spot_revenue_eur = spot_weighted_sum
+        spot_hours_covered = len(valid_spot_prices)
+        if spot_weighted_prod_kwh > 0:
+            spot_realized_price = spot_weighted_sum / (spot_weighted_prod_kwh / 1000.0)
+        if valid_spot_prices:
+            spot_simple_avg = sum(valid_spot_prices) / len(valid_spot_prices)
+
+    total_revenue_eur = fit_revenue_eur + spot_revenue_eur
+    total_mwh = total_kwh / 1000.0
+    revenue_metrics = {
+        "annual_revenue_eur": total_revenue_eur,
+        "effective_price_eur_mwh": (total_revenue_eur / total_mwh) if total_mwh else 0.0,
+        "avg_dayahead_price_eur_mwh": spot_simple_avg or 0.0,
+        "cannibalization_pct": (
+            ((spot_realized_price - spot_simple_avg) / spot_simple_avg * 100.0)
+            if (spot_realized_price is not None and spot_simple_avg)
+            else 0.0
+        ),
+    }
+    coverage_pct = (spot_hours_covered / max(len(hk), 1)) * 100.0
+    revenue_source = (
+        f"FiT €{fit_price:.0f}/MWh ({fit_scheme.split('—')[0].strip() if fit_scheme else 'FiT'}, expires {fit_expiry}) "
+        f"+ market sale at {zone or 'zone N/A'} hourly spot ({spot_hours_covered:,}/{len(hk):,} hours covered, {coverage_pct:.0f}%)"
+    )
+
+# Priority 2 : zonal hourly day-ahead prices only (merchant solar, no FiT)
+elif zone and period_prices and period_prices.get("prices_eur_mwh"):
+    revenue_metrics = compute_revenue_metrics(
+        hourly_production_kwh=hourly_data["hourly_production_kwh"],
+        hourly_prices_eur_mwh=period_prices["prices_eur_mwh"],
+    )
+    revenue_source = f"hourly day-ahead zone {zone}"
+
+# Priority 3 : flat fallback proxy (US ERCOT/CAISO — PPA-effective approximation)
+if not revenue_metrics and fallback_price is not None:
+    flat_prices = [fallback_price] * len(hourly_data["hourly_production_kwh"])
+    revenue_metrics = compute_revenue_metrics(
+        hourly_production_kwh=hourly_data["hourly_production_kwh"],
+        hourly_prices_eur_mwh=flat_prices,
+    )
+    revenue_source = f"flat annual avg ({fallback_price:.0f} €/MWh) — hourly data not available"
+
+_revenue_caption = revenue_source or f"Zone {zone or '—'} not available — revenue cannot be computed."
 
 st.markdown(
     f"""
     <div class="section-header">
-      <span class="section-label">Recent vs prior year · {_baseline_year_for_backtest}</span>
+      <span class="section-label">Revenue · last 12 months</span>
       <span class="section-caption">
-        Same calendar window, two different years. Recent = Open-Meteo archive (last available days,
-        5-day publishing lag) priced at current spot. Baseline = pvlib reconstruction of {_baseline_year_for_backtest} priced at {_baseline_year_for_backtest} spot.
-        Surfaces how the market context for this asset has evolved over the year.
+        Hourly production × hourly day-ahead spot price for each of the 8&nbsp;760 hours
+        in the rolling year ({T12M_START.isoformat()} → {T12M_END.isoformat()}).
+        Source : <b>{_revenue_caption}</b>.
       </span>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-bt_col_toggle, _ = st.columns([1, 4])
-with bt_col_toggle:
-    bt_window = st.radio(
-        "Window",
-        options=[7, 30],
-        format_func=lambda d: f"Last {d} days",
-        horizontal=True,
-        key=f"bt-window-{selected_park_id}",
-        label_visibility="collapsed",
+r1, r2, r3, r4 = st.columns(4)
+
+if revenue_metrics:
+    r1.metric(
+        "Total revenue (T12M)",
+        f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
+        help=(
+            f"Total euros earned over the last 12 months. Italian utility-scale plants (>1 MW) under "
+            f"Conto Energia receive a DUAL revenue: (1) State-paid feed-in incentive at €{fit_price:.0f}/MWh on every "
+            f"MWh produced (until {fit_expiry}), PLUS (2) sale of the same energy on the wholesale market at zonal "
+            f"hourly spot price. Total = FiT × production + Σ(production_h × spot_h). "
+            f"FiT portion: €{fit_revenue_eur/1_000_000:.2f} M (locked). Spot sale portion: €{spot_revenue_eur/1_000_000:.2f} M (variable)."
+            if is_fit_locked else
+            "Total euros earned over the last 12 months. "
+            "Computed by summing, for each hour : production_MWh × spot_price_EUR_per_MWh. "
+            "Captures actual market conditions hour by hour, including negative spot prices and the regulatory floor at 0 €/MWh in Italy."
+        ),
     )
+    r2.metric(
+        "Effective price (T12M)" + (" — FiT+spot" if is_fit_locked else ""),
+        f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
+        help=(
+            f"FiT strike + production-weighted realised spot. = Total revenue / total production_MWh. "
+            f"Breakdown: €{fit_price:.0f}/MWh fixed FiT incentive (paid by State, until {fit_expiry}) "
+            + (f"+ €{spot_realized_price:.1f}/MWh from market sale (production-weighted = post-cannibalisation)." if spot_realized_price is not None else "+ market sale data unavailable.")
+            if is_fit_locked else
+            "The price actually realised on each MWh sold, weighted by when production happened. "
+            "Formula : total_revenue / total_production_mwh. "
+            "Differs from the simple market average because the park doesn't produce evenly — it produces a lot at midday "
+            "(when prices are pushed down by solar oversupply) and nothing at night (when prices spike). "
+            "This is the asset's true revenue per MWh — what really lands on the cash flow."
+        ),
+    )
+    if is_fit_locked:
+        # Show market sale spot avg + cannibalisation (applies to spot portion only)
+        if spot_simple_avg is not None and spot_realized_price is not None:
+            r3.metric(
+                "Spot day-ahead avg",
+                f"{spot_simple_avg:.1f} €/MWh",
+                delta=f"realised on prod: {spot_realized_price:.1f}",
+                delta_color="off",
+                help=(
+                    f"Simple time-average of zone {zone} hourly day-ahead spot prices over the {spot_hours_covered:,} hours covered. "
+                    f"The 'realised on prod' delta shows the production-weighted average ({spot_realized_price:.1f} €/MWh) — "
+                    f"what the plant actually earned per MWh on the SPOT portion of its revenue (not counting FiT). "
+                    "Lower than the simple average because solar concentrates production in low-price hours (cannibalisation)."
+                ),
+            )
+            cann_spot = (spot_realized_price - spot_simple_avg) / spot_simple_avg * 100.0
+            r4.metric(
+                "Spot cannibalisation",
+                f"{cann_spot:+.1f} %",
+                help=(
+                    "Cannibalisation on the SPOT portion of revenue only. "
+                    "FiT portion (~€" + f"{fit_price:.0f}" + "/MWh) is locked and NOT cannibalised — paid on every MWh regardless of hour. "
+                    f"Spot side captures Italian solar penetration effect: realised €{spot_realized_price:.1f}/MWh vs simple avg €{spot_simple_avg:.1f}/MWh. "
+                    "When FiT expires, total revenue drops to spot-only and cannibalisation becomes the entire risk."
+                ),
+            )
+        else:
+            r3.metric("Spot day-ahead avg", "—", help=(
+                f"Wholesale spot data unavailable for zone {zone or '—'} on this T12M window. "
+                "energy-charts.info has limited Italian zone coverage (IT-North data only from Oct 2025). "
+                "Total revenue shown is FiT-only — actual revenue is higher (FiT + market sale) but missing market data."
+            ))
+            r4.metric("Spot cannibalisation", "N/A", help="Spot data unavailable.")
+    else:
+        r3.metric(
+            "Day-ahead avg (T12M)",
+            f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
+            help=(
+                "Simple arithmetic mean of all 8 760 hourly day-ahead market prices on the asset's bidding zone. "
+                "Reference market level — what the typical hour was priced at on average. "
+                "An asset would earn this much per MWh ONLY if it produced flat across all hours. "
+                "Solar parks earn less because their generation is concentrated in low-price hours."
+            ),
+        )
+        cann = revenue_metrics["cannibalization_pct"]
+        r4.metric(
+            "Cannibalisation (T12M)",
+            f"{cann:+.1f} %",
+            help=(
+                "Difference between the effective sale price and the day-ahead average, in % of the average. "
+                "Formula : (effective − day_ahead_avg) / day_ahead_avg. "
+                "Negative = the asset earns less than the market average per MWh because solar concentrates production at midday "
+                "when oversupply pushes prices down. "
+                "Worsens with the solar penetration rate of the zone — Iberia 2026 typically sees -50 to -80% cannibalisation. "
+                "The risk #1 of merchant solar today, and the main argument for PPAs, batteries, and east/west tracking."
+            ),
+        )
+else:
+    r1.metric("Total revenue (T12M)", "—", help="No price data available for this zone over this window.")
+    r2.metric("Effective sale price (T12M)", "—")
+    r3.metric("Day-ahead avg (T12M)", "—")
+    r4.metric("Cannibalisation (T12M)", "—")
 
-bt_zone = get_zone(selected_row["country"], park_id=selected_park_id)
-bt_recent = _backtest_recent_cached(
-    park_id=selected_park_id,
-    lat=float(selected_row["lat"]),
-    lon=float(selected_row["lon"]),
-    capacity=float(selected_row["capacity_mwp"]),
-    zone=bt_zone,
-    days=bt_window,
-)
-bt_old = _backtest_baseline_cached(
-    park_id=selected_park_id,
-    hourly_kwh_tuple=tuple(hourly_data["hourly_production_kwh"]),
-    baseline_year=_baseline_year_for_backtest,
-    zone=bt_zone,
-    days=bt_window,
-)
-
-# Apply fallback price to backtest results if hourly zone-prices are missing.
-# Same convention as the T12M revenue path: production_mwh × flat_price.
-def _apply_fallback_to_bt(bt: dict | None, flat_price: float) -> None:
-    if not bt or bt.get("revenue_eur") is not None:
-        return
-    bt["revenue_eur"] = bt["production_mwh"] * flat_price
-    bt["effective_price_eur_mwh"] = flat_price
-    bt["avg_dayahead_price_eur_mwh"] = flat_price
-    bt["cannibalisation_pct"] = 0.0
-
-if fallback_price is not None:
-    _apply_fallback_to_bt(bt_recent, fallback_price)
-    _apply_fallback_to_bt(bt_old, fallback_price)
-
-if bt_recent and bt_old:
-    bt_start, bt_end = get_recent_window(days=bt_window, end_offset_days=5)
-    bt_old_start = bt_start.replace(year=_baseline_year_for_backtest)
-    bt_old_end = bt_end.replace(year=_baseline_year_for_backtest)
+# Source caption
+if reported:
+    src_url = reported.get("source_url", "")
+    src_year = reported.get("year", "—")
+    src_note = reported.get("note", "")
     st.markdown(
-        f"<div style='font-family: \"JetBrains Mono\", monospace; font-size: 0.72rem; "
-        f"color: var(--text-muted); margin: 8px 0 14px; letter-spacing: 0.04em;'>"
-        f"Recent window : <b style='color:var(--text-secondary);'>{bt_start} → {bt_end}</b> · "
-        f"compared to <b style='color:var(--text-secondary);'>{bt_old_start} → {bt_old_end}</b>"
-        f"</div>",
+        f"""
+        <div class="source-caption">
+          <span class="src-label">Reported source</span>
+          {float(reported['annual_mwh']):,.0f} MWh · {src_year} ·
+          <a href="{src_url}" target="_blank">{src_url[:80]}{'…' if len(src_url) > 80 else ''}</a>
+          <div class="src-note">{src_note}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <div class="source-caption">
+          <span class="src-label">Reported source</span>
+          No public production figure identified for this park — delta cannot be computed.
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    bt1, bt2, bt3, bt4 = st.columns(4)
+st.markdown('<div class="vspace-lg"></div>', unsafe_allow_html=True)
 
-    # Production (climatic — same site, slightly different weather year by year)
-    delta_prod = (bt_recent["production_mwh"] - bt_old["production_mwh"]) / bt_old["production_mwh"] * 100 if bt_old["production_mwh"] else 0
-    bt1.metric(
-        f"Production ({bt_window}d)",
-        f"{bt_recent['production_mwh']:,.0f} MWh",
-        delta=f"{delta_prod:+.1f}% vs {_baseline_year_for_backtest}",
-        delta_color="off",
-        help=f"{_baseline_year_for_backtest} same window: {bt_old['production_mwh']:,.0f} MWh. Climatic variation between two years.",
-    )
+# ---------------------------------------------------------------------------
+# Daily output chart — single fluid line, dated year DATA_YEAR
+# ---------------------------------------------------------------------------
 
-    # Revenue (the key signal)
-    if bt_recent.get("revenue_eur") is not None and bt_old.get("revenue_eur"):
-        delta_rev = (bt_recent["revenue_eur"] - bt_old["revenue_eur"]) / bt_old["revenue_eur"] * 100
-        rev_recent_k = bt_recent["revenue_eur"] / 1000.0
-        bt2.metric(
-            f"Revenue ({bt_window}d)",
-            f"€ {rev_recent_k:,.0f} k",
-            delta=f"{delta_rev:+.1f}% vs {_baseline_year_for_backtest}",
-            delta_color="off",
-            help=f"{_baseline_year_for_backtest} same window: € {bt_old['revenue_eur']/1000:,.0f}k. Captures market evolution.",
-        )
-    else:
-        bt2.metric(f"Revenue ({bt_window}d)", "—", help=f"Zone {bt_zone or '—'} not available.")
+# ----- Daily production + daily revenue, full T12M window -----
+st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
 
-    # Effective price
-    if bt_recent.get("effective_price_eur_mwh") is not None and bt_old.get("effective_price_eur_mwh"):
-        delta_eff = bt_recent["effective_price_eur_mwh"] - bt_old["effective_price_eur_mwh"]
-        bt3.metric(
-            f"Effective price ({bt_window}d)",
-            f"{bt_recent['effective_price_eur_mwh']:,.1f} €/MWh",
-            delta=f"{delta_eff:+.1f} vs {_baseline_year_for_backtest}",
-            delta_color="off",
-            help=f"{_baseline_year_for_backtest} same window: {bt_old['effective_price_eur_mwh']:.1f} €/MWh.",
-        )
-    else:
-        bt3.metric(f"Effective price ({bt_window}d)", "—")
+daily_kwh_t12m = hourly_to_daily(hourly_data["hourly_production_kwh"])
+daily_mwh_t12m = [v / 1000.0 for v in daily_kwh_t12m]
+day_dates_t12m = pd.date_range(T12M_START.isoformat(), periods=len(daily_mwh_t12m), freq="D")
 
-    # Cannibalisation
-    if bt_recent.get("cannibalisation_pct") is not None and bt_old.get("cannibalisation_pct") is not None:
-        delta_cann = bt_recent["cannibalisation_pct"] - bt_old["cannibalisation_pct"]
-        bt4.metric(
-            f"Cannibalisation ({bt_window}d)",
-            f"{bt_recent['cannibalisation_pct']:+.1f} %",
-            delta=f"{delta_cann:+.1f} pts vs {_baseline_year_for_backtest}",
-            delta_color="off",
-            help=f"{_baseline_year_for_backtest} same window: {bt_old['cannibalisation_pct']:+.1f}%. Negative delta = cannibalisation worsened.",
-        )
-    else:
-        bt4.metric(f"Cannibalisation ({bt_window}d)", "—")
-
-    # ----- Daily production + daily revenue, full T12M window -----
-    st.markdown('<div class="vspace"></div>', unsafe_allow_html=True)
-
-    daily_kwh_t12m = hourly_to_daily(hourly_data["hourly_production_kwh"])
-    daily_mwh_t12m = [v / 1000.0 for v in daily_kwh_t12m]
-    day_dates_t12m = pd.date_range(T12M_START.isoformat(), periods=len(daily_mwh_t12m), freq="D")
-
-    # Daily revenue : per-hour production × per-hour price aggregated to days
-    daily_rev_eur: list[float | None] = []
-    if revenue_metrics and (period_prices and period_prices.get("prices_eur_mwh") or fallback_price is not None):
-        if period_prices and period_prices.get("prices_eur_mwh"):
-            hp_raw = period_prices["prices_eur_mwh"]
-            # Pad/truncate to match production length (handles partial zone coverage e.g. IT-North)
-            hk_len = len(hourly_data["hourly_production_kwh"])
-            if len(hp_raw) < hk_len:
-                hp = list(hp_raw) + [None] * (hk_len - len(hp_raw))
-            else:
-                hp = list(hp_raw[:hk_len])
+# Daily revenue : per-hour production × per-hour price aggregated to days
+daily_rev_eur: list[float | None] = []
+if revenue_metrics and (period_prices and period_prices.get("prices_eur_mwh") or fallback_price is not None):
+    if period_prices and period_prices.get("prices_eur_mwh"):
+        hp_raw = period_prices["prices_eur_mwh"]
+        # Pad/truncate to match production length (handles partial zone coverage e.g. IT-North)
+        hk_len = len(hourly_data["hourly_production_kwh"])
+        if len(hp_raw) < hk_len:
+            hp = list(hp_raw) + [None] * (hk_len - len(hp_raw))
         else:
-            hp = [fallback_price or 0.0] * len(hourly_data["hourly_production_kwh"])
-        hk = hourly_data["hourly_production_kwh"]
-        # For FiT-locked parks, daily revenue includes both FiT (constant) AND spot
-        for d in range(len(daily_mwh_t12m)):
-            i0 = d * 24
-            i1 = min(i0 + 24, len(hk))
-            day_kwh = sum(hk[i] for i in range(i0, i1))
-            day_spot = sum(
-                (hk[i] / 1000.0) * (hp[i] if hp[i] is not None else 0.0)
-                for i in range(i0, i1)
-            )
-            day_fit = (day_kwh / 1000.0) * fit_price if is_fit_locked else 0.0
-            daily_rev_eur.append(day_spot + day_fit)
+            hp = list(hp_raw[:hk_len])
+    else:
+        hp = [fallback_price or 0.0] * len(hourly_data["hourly_production_kwh"])
+    hk = hourly_data["hourly_production_kwh"]
+    # For FiT-locked parks, daily revenue includes both FiT (constant) AND spot
+    for d in range(len(daily_mwh_t12m)):
+        i0 = d * 24
+        i1 = min(i0 + 24, len(hk))
+        day_kwh = sum(hk[i] for i in range(i0, i1))
+        day_spot = sum(
+            (hk[i] / 1000.0) * (hp[i] if hp[i] is not None else 0.0)
+            for i in range(i0, i1)
+        )
+        day_fit = (day_kwh / 1000.0) * fit_price if is_fit_locked else 0.0
+        daily_rev_eur.append(day_spot + day_fit)
 
-    # When only a flat fallback price is available, the revenue line is just
-    # the production line × constant — colinear and visually misleading.
-    # Suppress it in that case and keep production-only.
-    _is_flat_fallback = bool(daily_rev_eur and (not period_prices or not period_prices.get("prices_eur_mwh")) and fallback_price is not None)
-    _show_revenue_line = bool(daily_rev_eur) and not _is_flat_fallback
-    _ts_title = (
-        f"Daily production · T12M (revenue proxy at {fallback_price:.0f} €/MWh — line omitted, redundant with production)"
-        if _is_flat_fallback else
-        f"Daily production & revenue · T12M ({T12M_START.isoformat()} → {T12M_END.isoformat()})"
-    )
+# When only a flat fallback price is available, the revenue line is just
+# the production line × constant — colinear and visually misleading.
+# Suppress it in that case and keep production-only.
+_is_flat_fallback = bool(daily_rev_eur and (not period_prices or not period_prices.get("prices_eur_mwh")) and fallback_price is not None)
+_show_revenue_line = bool(daily_rev_eur) and not _is_flat_fallback
+_ts_title = (
+    f"Daily production · T12M (revenue proxy at {fallback_price:.0f} €/MWh — line omitted, redundant with production)"
+    if _is_flat_fallback else
+    f"Daily production & revenue · T12M ({T12M_START.isoformat()} → {T12M_END.isoformat()})"
+)
 
-    fig_ts = go.Figure()
+fig_ts = go.Figure()
+fig_ts.add_trace(go.Scatter(
+    x=day_dates_t12m,
+    y=daily_mwh_t12m,
+    name="Daily production",
+    mode="lines",
+    line=dict(color="#e8e4d6", width=1.6, shape="spline", smoothing=0.3),
+    fill="tozeroy",
+    fillcolor="rgba(232, 228, 214, 0.08)",
+    hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
+    yaxis="y",
+))
+if _show_revenue_line:
     fig_ts.add_trace(go.Scatter(
         x=day_dates_t12m,
-        y=daily_mwh_t12m,
-        name="Daily production",
+        y=[r / 1000.0 for r in daily_rev_eur],
+        name="Daily revenue",
         mode="lines",
-        line=dict(color="#e8e4d6", width=1.6, shape="spline", smoothing=0.3),
-        fill="tozeroy",
-        fillcolor="rgba(232, 228, 214, 0.08)",
-        hovertemplate="%{x|%d %b %Y} · %{y:,.1f} MWh<extra></extra>",
-        yaxis="y",
+        line=dict(color="rgba(125, 211, 252, 0.85)", width=1.4, shape="spline", smoothing=0.3),
+        hovertemplate="%{x|%d %b %Y} · € %{y:,.1f} k<extra></extra>",
+        yaxis="y2",
     ))
-    if _show_revenue_line:
-        fig_ts.add_trace(go.Scatter(
-            x=day_dates_t12m,
-            y=[r / 1000.0 for r in daily_rev_eur],
-            name="Daily revenue",
-            mode="lines",
-            line=dict(color="rgba(125, 211, 252, 0.85)", width=1.4, shape="spline", smoothing=0.3),
-            hovertemplate="%{x|%d %b %Y} · € %{y:,.1f} k<extra></extra>",
-            yaxis="y2",
-        ))
-    fig_ts.update_layout(
-        title=dict(
-            text=_ts_title,
-            font=dict(color="#f1f5f9", size=13, family="Geist", weight=500),
-            x=0.0, xanchor="left", pad=dict(b=8),
-        ),
-        height=260,
-        margin=dict(l=0, r=0, t=44, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False, tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"), tickformat="%b %y", dtick="M1"),
-        yaxis=dict(
-            gridcolor="rgba(148, 163, 184, 0.06)",
-            tickfont=dict(color="#cbd5e1", size=10, family="JetBrains Mono"),
-            ticksuffix=" MWh",
-            title=None,
-        ),
-        yaxis2=dict(
-            overlaying="y", side="right", showgrid=False,
-            tickfont=dict(color="rgba(125, 211, 252, 0.95)", size=10, family="JetBrains Mono"),
-            ticksuffix=" k€",
-            title=None,
-        ),
-        legend=dict(
-            orientation="h", x=0, y=1.18, xanchor="left", yanchor="top",
-            font=dict(color="#94a3b8", size=10, family="JetBrains Mono"),
-            bgcolor="rgba(0,0,0,0)",
-        ),
-        hoverlabel=dict(
-            bgcolor="rgba(13, 19, 32, 0.95)",
-            bordercolor="rgba(232, 228, 214, 0.4)",
-            font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
-        ),
-    )
-    st.plotly_chart(fig_ts, width="stretch", config={"displayModeBar": False})
-elif bt_recent and not bt_old:
-    st.info(f"{_baseline_year_for_backtest} backtest unavailable for this zone.")
-elif not bt_recent:
-    st.info("Recent backtest unavailable — Open-Meteo archive or spot prices fetch failed.")
-
+fig_ts.update_layout(
+    title=dict(
+        text=_ts_title,
+        font=dict(color="#f1f5f9", size=13, family="Geist", weight=500),
+        x=0.0, xanchor="left", pad=dict(b=8),
+    ),
+    height=260,
+    margin=dict(l=0, r=0, t=44, b=10),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    xaxis=dict(showgrid=False, tickfont=dict(color="#64748b", size=10, family="JetBrains Mono"), tickformat="%b %y", dtick="M1"),
+    yaxis=dict(
+        gridcolor="rgba(148, 163, 184, 0.06)",
+        tickfont=dict(color="#cbd5e1", size=10, family="JetBrains Mono"),
+        ticksuffix=" MWh",
+        title=None,
+    ),
+    yaxis2=dict(
+        overlaying="y", side="right", showgrid=False,
+        tickfont=dict(color="rgba(125, 211, 252, 0.95)", size=10, family="JetBrains Mono"),
+        ticksuffix=" k€",
+        title=None,
+    ),
+    legend=dict(
+        orientation="h", x=0, y=1.18, xanchor="left", yanchor="top",
+        font=dict(color="#94a3b8", size=10, family="JetBrains Mono"),
+        bgcolor="rgba(0,0,0,0)",
+    ),
+    hoverlabel=dict(
+        bgcolor="rgba(13, 19, 32, 0.95)",
+        bordercolor="rgba(232, 228, 214, 0.4)",
+        font=dict(color="#f1f5f9", family="JetBrains Mono", size=11),
+    ),
+)
+st.plotly_chart(fig_ts, width="stretch", config={"displayModeBar": False})
 # ---------------------------------------------------------------------------
 # About this data
 # ---------------------------------------------------------------------------
