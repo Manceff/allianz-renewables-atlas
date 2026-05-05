@@ -87,6 +87,20 @@ class ParkModel(BaseModel):
         description="'forward_sale' (Allianz bought permits / RESS contracts pre-build, no production yet), "
                     "'operating' (panels generating), or None (single-site or not specified).",
     )
+    fit_strike_price_eur_mwh: float | None = Field(
+        default=None,
+        description="If under a feed-in tariff (Italian Conto Energia, French CRE/EDF OA, etc.), "
+                    "the contracted €/MWh. Asset earns this regardless of wholesale price — "
+                    "spot calculations should be replaced by FiT × production.",
+    )
+    fit_scheme: str | None = Field(
+        default=None,
+        description="Free-text description of the FiT scheme (e.g. 'Conto Energia II + Spalma-Incentivi 2015 -8%').",
+    )
+    fit_expiry_year: int | None = Field(
+        default=None, ge=1980, le=2050,
+        description="Year the FiT contract expires (typically COD + 20 years, or +24 with Spalma Option A).",
+    )
     divested: bool = Field(
         default=False,
         description="True if Allianz no longer owns this asset. Kept in the index for historical traceability.",

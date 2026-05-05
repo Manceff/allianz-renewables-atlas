@@ -152,38 +152,23 @@ def fetch_period_prices(zone: str, start: str, end: str) -> dict | None:
     if not timestamps or not prices:
         return None
 
-    # Detect resolution from first delta. 900s = 15min, 3600s = 1h.
-    if len(timestamps) >= 2:
-        delta = timestamps[1] - timestamps[0]
-    else:
-        delta = 3600
+    # Always resample to hourly buckets — robust to mixed resolutions.
+    # energy-charts switched 1h → 15min around Oct 2025, so an arbitrary
+    # T12M window can contain BOTH resolutions. Bucket every timestamp
+    # by its hour (ts - ts%3600) and average prices within the bucket.
+    buckets: dict[int, list[float]] = {}
+    for ts, p in zip(timestamps, prices):
+        ts_hour = ts - (ts % 3600)
+        if p is None:
+            continue
+        buckets.setdefault(ts_hour, []).append(float(p))
 
-    if delta == 900:
-        # Resample 15-min → 1h by averaging 4 quarter-hours
-        hourly_ts = []
-        hourly_prices = []
-        bucket: list[float] = []
-        bucket_start_ts = None
-        for ts, p in zip(timestamps, prices):
-            ts_hour = ts - (ts % 3600)
-            if bucket_start_ts is None:
-                bucket_start_ts = ts_hour
-            if ts_hour != bucket_start_ts and bucket:
-                valid = [x for x in bucket if x is not None]
-                hourly_ts.append(bucket_start_ts)
-                hourly_prices.append(sum(valid) / len(valid) if valid else None)
-                bucket = []
-                bucket_start_ts = ts_hour
-            bucket.append(float(p) if p is not None else None)
-        if bucket and bucket_start_ts is not None:
-            valid = [x for x in bucket if x is not None]
-            hourly_ts.append(bucket_start_ts)
-            hourly_prices.append(sum(valid) / len(valid) if valid else None)
-        return {"timestamps": hourly_ts, "prices_eur_mwh": hourly_prices}
-
+    sorted_hours = sorted(buckets.keys())
     return {
-        "timestamps": list(timestamps),
-        "prices_eur_mwh": [float(p) if p is not None else None for p in prices],
+        "timestamps": sorted_hours,
+        "prices_eur_mwh": [
+            sum(buckets[h]) / len(buckets[h]) for h in sorted_hours
+        ],
     }
 
 

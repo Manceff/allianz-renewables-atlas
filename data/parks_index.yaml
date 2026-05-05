@@ -38,7 +38,10 @@ parks:
     allianz_stake_pct: 100
     acquisition_year: 2010
     press_release_url: "https://www.pv-tech.org/ibc_solar_sells_11-2mw_italian_park_to_allianz_specialised_investments/"
-    notes: "Grid-connected 7 déc 2010, acquis par Allianz Specialised Investments. 47 000 modules polycrystalline + 3 600 thin-film sur 32 ha, Manzano (Udine, Frioul-VG). ~13 GWh/an. Premier utility-scale ACP en Italie."
+    notes: "Grid-connected 7 déc 2010, acquis par Allianz Specialised Investments. 47 000 modules polycrystalline + 3 600 thin-film sur 32 ha, Manzano (Udine, Frioul-VG). ~13 GWh/an. Premier utility-scale ACP en Italie. Sous Conto Energia II — revenue locked-in jusqu'à déc 2030, wholesale spot non pertinent."
+    fit_strike_price_eur_mwh: 318.0
+    fit_scheme: "Conto Energia II (DM 19/02/2007) — base €0.346/kWh non-integrated >20 kW H2-2010 vintage, post Spalma-Incentivi 2015 Option C (-8% pour P>900 kW)"
+    fit_expiry_year: 2030
     has_pvgis_estimate: true
     has_reported_production: true
 
@@ -53,7 +56,10 @@ parks:
     allianz_stake_pct: 100
     acquisition_year: 2013
     press_release_url: "https://www.infrappp.com/news/allianz-acquires-italian-photovoltaic-plant"
-    notes: "Acquis via le premier fonds AREF I entre fin 2012 et mi-2013. Foggia, Pouilles. Acquisition emblématique du modèle ACP : risque réglementaire italien (décret Spalma-Incentivi) intégré dans la valorisation. ~12 280 MWh/an, alimente 3 000 foyers. INCOHÉRENCE DATA : InfraPPP indique 8 MWp / acquisition 2013 ; GEM Wiki indique 10.6 MWac / COD 2017 — possible extension/repowering Phase 2 entre 2013-2017 (un ratio DC/AC < 1 est physiquement impossible). À vérifier via GSE Atlaimpianti."
+    notes: "Acquis via le premier fonds AREF I entre fin 2012 et mi-2013. Foggia, Pouilles. Acquisition emblématique du modèle ACP : risque réglementaire italien (décret Spalma-Incentivi) intégré dans la valorisation. ~12 280 MWh/an, alimente 3 000 foyers. Sous Conto Energia III (vintage 2011) — revenue locked-in jusqu'à ~2031. INCOHÉRENCE DATA : InfraPPP indique 8 MWp / acquisition 2013 ; GEM Wiki indique 10.6 MWac / COD 2017 — possible extension/repowering Phase 2. À vérifier via GSE Atlaimpianti."
+    fit_strike_price_eur_mwh: 250.0
+    fit_scheme: "Conto Energia III (DM 06/08/2010) — estimation €0.272/kWh range vintage 2011 H1, post Spalma-Incentivi 2015 Option C (-8% pour P>900 kW). Valeur conservative ; à affiner via GSE Atlaimpianti."
+    fit_expiry_year: 2031
     has_pvgis_estimate: true
     has_reported_production: true
 

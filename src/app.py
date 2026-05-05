@@ -1084,6 +1084,15 @@ st.markdown(
 
 zone = get_zone(selected_row["country"], park_id=selected_park_id)
 fallback_price = get_fallback_price(selected_park_id)
+# Look up FiT info on the raw park model
+_park_for_fit = _get_park_for_status  # ensure helper is loaded above (used in forward-sale branch)
+from src.lib.parks_loader import get_park_by_id as _get_park_for_fit2
+_park_obj_for_fit = _get_park_for_fit2(selected_park_id)
+fit_price = _park_obj_for_fit.fit_strike_price_eur_mwh if _park_obj_for_fit else None
+fit_scheme = _park_obj_for_fit.fit_scheme if _park_obj_for_fit else None
+fit_expiry = _park_obj_for_fit.fit_expiry_year if _park_obj_for_fit else None
+is_fit_locked = fit_price is not None
+
 revenue_metrics: dict = {}
 revenue_source = ""
 period_prices: dict | None = None
@@ -1092,7 +1101,17 @@ period_prices: dict | None = None
 def _fetch_period_prices_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
     return fetch_period_prices(zone, start_iso, end_iso)
 
-if zone:
+# Priority 1 : FiT-locked asset (Italian Conto Energia, etc.) — wholesale spot is irrelevant
+if is_fit_locked:
+    flat_prices = [fit_price] * len(hourly_data["hourly_production_kwh"])
+    revenue_metrics = compute_revenue_metrics(
+        hourly_production_kwh=hourly_data["hourly_production_kwh"],
+        hourly_prices_eur_mwh=flat_prices,
+    )
+    revenue_source = f"FiT-locked at €{fit_price:.0f}/MWh — {fit_scheme} (expires {fit_expiry})"
+
+# Priority 2 : zonal hourly day-ahead prices (energy-charts.info)
+elif zone:
     period_prices = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
     if period_prices and period_prices.get("prices_eur_mwh"):
         revenue_metrics = compute_revenue_metrics(
@@ -1101,7 +1120,7 @@ if zone:
         )
         revenue_source = f"hourly day-ahead zone {zone}"
 
-# Fallback : flat annual avg price for US/Ireland zones not on energy-charts
+# Priority 3 : flat fallback proxy (US ERCOT/CAISO — PPA-effective approximation)
 if not revenue_metrics and fallback_price is not None:
     flat_prices = [fallback_price] * len(hourly_data["hourly_production_kwh"])
     revenue_metrics = compute_revenue_metrics(
@@ -1133,15 +1152,22 @@ if revenue_metrics:
         "Total revenue (T12M)",
         f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
         help=(
+            f"Total euros earned over the last 12 months. Asset is FiT-locked under {fit_scheme} — "
+            f"earns €{fit_price:.0f}/MWh on every MWh until {fit_expiry}, regardless of wholesale market. "
+            "Wholesale spot fluctuations are NOT relevant to this asset's cash flow."
+            if is_fit_locked else
             "Total euros earned over the last 12 months. "
             "Computed by summing, for each hour : production_MWh × spot_price_EUR_per_MWh. "
             "Captures actual market conditions hour by hour, including negative spot prices and the regulatory floor at 0 €/MWh in Italy."
         ),
     )
     r2.metric(
-        "Effective sale price (T12M)",
+        "Effective sale price (T12M)" + (" — FiT" if is_fit_locked else ""),
         f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
         help=(
+            f"Locked at the {fit_scheme} contracted strike price. Constant {fit_price:.0f} €/MWh on every MWh "
+            f"until {fit_expiry}. The State (or counterparty) absorbs the volatility — the asset is a fixed-income proxy."
+            if is_fit_locked else
             "The price actually realised on each MWh sold, weighted by when production happened. "
             "Formula : total_revenue / total_production_mwh. "
             "Differs from the simple market average because the park doesn't produce evenly — it produces a lot at midday "
@@ -1149,29 +1175,64 @@ if revenue_metrics:
             "This is the asset's true revenue per MWh — what really lands on the cash flow."
         ),
     )
-    r3.metric(
-        "Day-ahead avg (T12M)",
-        f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
-        help=(
-            "Simple arithmetic mean of all 8 760 hourly day-ahead market prices on the asset's bidding zone. "
-            "Reference market level — what the typical hour was priced at on average. "
-            "An asset would earn this much per MWh ONLY if it produced flat across all hours. "
-            "Solar parks earn less because their generation is concentrated in low-price hours."
-        ),
-    )
-    cann = revenue_metrics["cannibalization_pct"]
-    r4.metric(
-        "Cannibalisation (T12M)",
-        f"{cann:+.1f} %",
-        help=(
-            "Difference between the effective sale price and the day-ahead average, in % of the average. "
-            "Formula : (effective − day_ahead_avg) / day_ahead_avg. "
-            "Negative = the asset earns less than the market average per MWh because solar concentrates production at midday "
-            "when oversupply pushes prices down. "
-            "Worsens with the solar penetration rate of the zone — Iberia 2026 typically sees -50 to -80% cannibalisation. "
-            "The risk #1 of merchant solar today, and the main argument for PPAs, batteries, and east/west tracking."
-        ),
-    )
+    if is_fit_locked:
+        # For FiT-locked parks, show wholesale spot as informational context (not revenue-relevant)
+        _spot_for_context = None
+        if zone:
+            _wholesale = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
+            if _wholesale and _wholesale.get("prices_eur_mwh"):
+                _vp = [p for p in _wholesale["prices_eur_mwh"] if p is not None]
+                if _vp:
+                    _spot_for_context = sum(_vp) / len(_vp)
+        if _spot_for_context is not None:
+            _premium = (fit_price - _spot_for_context) / _spot_for_context * 100.0
+            r3.metric(
+                "Wholesale spot avg (info)",
+                f"{_spot_for_context:.1f} €/MWh",
+                delta=f"FiT premium +{_premium:.0f}%",
+                delta_color="off",
+                help=(
+                    f"Average wholesale day-ahead spot price on zone {zone} over T12M. "
+                    f"INFORMATIVE ONLY — the asset earns the FiT (€{fit_price:.0f}/MWh), "
+                    f"not the wholesale price. The {_premium:.0f}% premium is what the FiT contract is worth above merchant exposure. "
+                    "If the FiT expires (2030 for Manzano, 2031 for SiSen), the asset reverts to wholesale and revenue likely halves."
+                ),
+            )
+        else:
+            r3.metric("Wholesale spot avg (info)", "—", help="Wholesale data not available on this zone window.")
+        r4.metric(
+            "Cannibalisation (T12M)",
+            "N/A",
+            help=(
+                "Cannibalisation does NOT apply to FiT-locked assets. The State guarantees the strike price on every MWh "
+                "regardless of when it's produced, so the time-weighting effect that hurts merchant solar parks is neutralised. "
+                "For these vintage Italian assets (Conto Energia 2010-2013), cannibalisation risk only appears post-FiT-expiry."
+            ),
+        )
+    else:
+        r3.metric(
+            "Day-ahead avg (T12M)",
+            f"{revenue_metrics['avg_dayahead_price_eur_mwh']:,.1f} €/MWh",
+            help=(
+                "Simple arithmetic mean of all 8 760 hourly day-ahead market prices on the asset's bidding zone. "
+                "Reference market level — what the typical hour was priced at on average. "
+                "An asset would earn this much per MWh ONLY if it produced flat across all hours. "
+                "Solar parks earn less because their generation is concentrated in low-price hours."
+            ),
+        )
+        cann = revenue_metrics["cannibalization_pct"]
+        r4.metric(
+            "Cannibalisation (T12M)",
+            f"{cann:+.1f} %",
+            help=(
+                "Difference between the effective sale price and the day-ahead average, in % of the average. "
+                "Formula : (effective − day_ahead_avg) / day_ahead_avg. "
+                "Negative = the asset earns less than the market average per MWh because solar concentrates production at midday "
+                "when oversupply pushes prices down. "
+                "Worsens with the solar penetration rate of the zone — Iberia 2026 typically sees -50 to -80% cannibalisation. "
+                "The risk #1 of merchant solar today, and the main argument for PPAs, batteries, and east/west tracking."
+            ),
+        )
 else:
     r1.metric("Total revenue (T12M)", "—", help="No price data available for this zone over this window.")
     r2.metric("Effective sale price (T12M)", "—")
@@ -1300,7 +1361,28 @@ else:
 
 spot_context = None
 _live_fallback_price = get_fallback_price(selected_park_id)
-if live_spot and live_spot.get("price_eur_mwh") is not None:
+# For FiT-locked assets, show the FiT strike directly instead of wholesale spot
+if is_fit_locked:
+    l4.metric(
+        "Effective price (FiT)",
+        f"{fit_price:.0f} €/MWh",
+        delta="locked",
+        delta_color="off",
+        help=(
+            f"Asset is FiT-locked under {fit_scheme}. The State pays this fixed price on every MWh produced "
+            f"until {fit_expiry}. Wholesale spot is irrelevant for revenue. Live wholesale spot shown in 'Today's spot curve' below for context."
+        ),
+    )
+    if live_weather:
+        revenue_now = estimated_mw * fit_price
+        l5.metric(
+            "Revenue/h (live est.)",
+            f"€ {revenue_now:,.0f}",
+            help=f"Live output × FiT strike ({fit_price:.0f} €/MWh) × 1 hour. Locked in by Conto Energia until {fit_expiry}.",
+        )
+    else:
+        l5.metric("Revenue/h (live est.)", "—")
+elif live_spot and live_spot.get("price_eur_mwh") is not None:
     spot_price = live_spot["price_eur_mwh"]
     spot_context = interpret_spot_price(spot_price, live_zone)
     l4.metric(
