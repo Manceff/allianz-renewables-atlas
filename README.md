@@ -12,8 +12,6 @@ par parc dans le YAML d'index.
 
 **Live :** [allianz-renewables-atlas.streamlit.app](https://allianz-renewables-atlas-mancef-ferrah.streamlit.app/)
 
-![Home](docs/screenshots/01-home.png)
-
 ## Démarche
 
 Projet personnel initié par Mancef Ferrah dans le cadre d'une candidature en alternance
