@@ -1449,21 +1449,44 @@ else:
 spot_context = None
 _live_fallback_price = get_fallback_price(selected_park_id)
 
+# Park timezone resolution. Country code → IANA TZ; US parks need an
+# override since CA (Pacific) and TX (Central) share country "US".
+_COUNTRY_TZ = {
+    "IT": "Europe/Rome",
+    "PT": "Europe/Lisbon",
+    "FR": "Europe/Paris",
+    "ES": "Europe/Madrid",
+}
+_PARK_TZ_OVERRIDE = {
+    "lotus-solar-farm": "America/Los_Angeles",
+    "galloway-2": "America/Chicago",
+}
+_park_tz_name = _PARK_TZ_OVERRIDE.get(selected_park_id) or _COUNTRY_TZ.get(
+    selected_row["country"], "UTC"
+)
 
-def _local_time_str(iso_utc: str) -> str:
-    """Convert UTC ISO timestamp to a 'HH:MM local (HH:MM UTC)' string."""
+
+def _local_time_str(iso_utc: str, tz_name: str = _park_tz_name) -> str:
+    """Convert a UTC ISO timestamp to 'HH:MM park-local (HH:MM UTC)'.
+
+    Uses the park's IANA timezone (Europe/Rome for Manzano, etc.) — NOT the
+    server's local time. This matters on Streamlit Cloud where the server runs
+    in UTC, so a naive astimezone() would always render as UTC and confuse a
+    user looking at the asset's local hour.
+    """
     if not iso_utc:
         return "—"
     try:
         from datetime import datetime as _dt_loc
+        from zoneinfo import ZoneInfo
         dt_utc = _dt_loc.fromisoformat(iso_utc.replace("Z", "+00:00"))
-        local = dt_utc.astimezone()
+        local = dt_utc.astimezone(ZoneInfo(tz_name))
         local_str = local.strftime("%H:%M")
         utc_str = dt_utc.strftime("%H:%M")
         if local_str == utc_str:
             return f"{utc_str} UTC"
-        return f"{local_str} ({utc_str} UTC)"
-    except (ValueError, TypeError):
+        return f"{local_str} local ({utc_str} UTC)"
+    except (ValueError, TypeError, Exception):
         return iso_utc[:16].replace("T", " ")
 
 
