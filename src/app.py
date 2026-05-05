@@ -405,7 +405,8 @@ st.markdown(
       <p class="atlas-tag">
         Projet personnel initi&eacute; par Mancef Ferrah dans le cadre d'une
         candidature en alternance Investment Management. Atlas exploratoire
-        construit &agrave; partir de sources publiques uniquement.
+        des parcs solaires actifs d'Allianz Capital Partners, identifi&eacute;s
+        via sources publiques uniquement.
       </p>
     </div>
     """,
