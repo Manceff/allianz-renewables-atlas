@@ -1085,7 +1085,6 @@ st.markdown(
 zone = get_zone(selected_row["country"], park_id=selected_park_id)
 fallback_price = get_fallback_price(selected_park_id)
 # Look up FiT info on the raw park model
-_park_for_fit = _get_park_for_status  # ensure helper is loaded above (used in forward-sale branch)
 from src.lib.parks_loader import get_park_by_id as _get_park_for_fit2
 _park_obj_for_fit = _get_park_for_fit2(selected_park_id)
 fit_price = _park_obj_for_fit.fit_strike_price_eur_mwh if _park_obj_for_fit else None
@@ -1096,29 +1095,83 @@ is_fit_locked = fit_price is not None
 revenue_metrics: dict = {}
 revenue_source = ""
 period_prices: dict | None = None
+fit_revenue_eur = 0.0
+spot_revenue_eur = 0.0
+spot_realized_price = None  # production-weighted spot avg (for cannibalisation calc)
+spot_simple_avg = None      # time-weighted spot avg (for day-ahead reference)
+spot_hours_covered = 0
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_period_prices_cached(zone: str, start_iso: str, end_iso: str) -> dict | None:
     return fetch_period_prices(zone, start_iso, end_iso)
 
-# Priority 1 : FiT-locked asset (Italian Conto Energia, etc.) — wholesale spot is irrelevant
+# Fetch zonal spot prices (used both for spot-only revenue and FiT+spot dual-revenue)
+if zone:
+    period_prices = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
+
+# Priority 1 : Italian FiT-locked asset (Conto Energia >1 MW) — DUAL revenue:
+#   incentive tariff (FiT) PAID BY STATE on every MWh
+#   PLUS market sale of energy at zonal hourly spot price
+# Total = FiT × prod + spot_h × prod_h (each hour)
 if is_fit_locked:
-    flat_prices = [fit_price] * len(hourly_data["hourly_production_kwh"])
+    hk = hourly_data["hourly_production_kwh"]
+    total_kwh = sum(hk)
+    fit_revenue_eur = (total_kwh / 1000.0) * fit_price  # MWh × €/MWh
+
+    if period_prices and period_prices.get("prices_eur_mwh"):
+        # Map hourly production to spot prices via timestamp matching
+        spot_ts = period_prices["timestamps"]
+        spot_p = period_prices["prices_eur_mwh"]
+        spot_lookup = {ts: p for ts, p in zip(spot_ts, spot_p) if p is not None}
+        prod_ts_iso = hourly_data["timestamps"]
+        import datetime as _dtfit
+        valid_spot_prices = []
+        spot_weighted_sum = 0.0
+        spot_weighted_prod_kwh = 0.0
+        for i, ts_iso in enumerate(prod_ts_iso):
+            if i >= len(hk): break
+            try:
+                ts_int = int(_dtfit.datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp())
+                ts_hour = ts_int - (ts_int % 3600)
+                p = spot_lookup.get(ts_hour)
+                if p is not None:
+                    spot_weighted_sum += hk[i] / 1000.0 * p  # MWh × €/MWh
+                    spot_weighted_prod_kwh += hk[i]
+                    valid_spot_prices.append(p)
+            except (ValueError, AttributeError):
+                continue
+        spot_revenue_eur = spot_weighted_sum
+        spot_hours_covered = len(valid_spot_prices)
+        if spot_weighted_prod_kwh > 0:
+            spot_realized_price = spot_weighted_sum / (spot_weighted_prod_kwh / 1000.0)
+        if valid_spot_prices:
+            spot_simple_avg = sum(valid_spot_prices) / len(valid_spot_prices)
+
+    total_revenue_eur = fit_revenue_eur + spot_revenue_eur
+    total_mwh = total_kwh / 1000.0
+    revenue_metrics = {
+        "annual_revenue_eur": total_revenue_eur,
+        "effective_price_eur_mwh": (total_revenue_eur / total_mwh) if total_mwh else 0.0,
+        "avg_dayahead_price_eur_mwh": spot_simple_avg or 0.0,
+        "cannibalization_pct": (
+            ((spot_realized_price - spot_simple_avg) / spot_simple_avg * 100.0)
+            if (spot_realized_price is not None and spot_simple_avg)
+            else 0.0
+        ),
+    }
+    coverage_pct = (spot_hours_covered / max(len(hk), 1)) * 100.0
+    revenue_source = (
+        f"FiT €{fit_price:.0f}/MWh ({fit_scheme.split('—')[0].strip() if fit_scheme else 'FiT'}, expires {fit_expiry}) "
+        f"+ market sale at {zone or 'zone N/A'} hourly spot ({spot_hours_covered:,}/{len(hk):,} hours covered, {coverage_pct:.0f}%)"
+    )
+
+# Priority 2 : zonal hourly day-ahead prices only (merchant solar, no FiT)
+elif zone and period_prices and period_prices.get("prices_eur_mwh"):
     revenue_metrics = compute_revenue_metrics(
         hourly_production_kwh=hourly_data["hourly_production_kwh"],
-        hourly_prices_eur_mwh=flat_prices,
+        hourly_prices_eur_mwh=period_prices["prices_eur_mwh"],
     )
-    revenue_source = f"FiT-locked at €{fit_price:.0f}/MWh — {fit_scheme} (expires {fit_expiry})"
-
-# Priority 2 : zonal hourly day-ahead prices (energy-charts.info)
-elif zone:
-    period_prices = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
-    if period_prices and period_prices.get("prices_eur_mwh"):
-        revenue_metrics = compute_revenue_metrics(
-            hourly_production_kwh=hourly_data["hourly_production_kwh"],
-            hourly_prices_eur_mwh=period_prices["prices_eur_mwh"],
-        )
-        revenue_source = f"hourly day-ahead zone {zone}"
+    revenue_source = f"hourly day-ahead zone {zone}"
 
 # Priority 3 : flat fallback proxy (US ERCOT/CAISO — PPA-effective approximation)
 if not revenue_metrics and fallback_price is not None:
@@ -1152,9 +1205,11 @@ if revenue_metrics:
         "Total revenue (T12M)",
         f"€ {revenue_metrics['annual_revenue_eur'] / 1_000_000:,.2f} M",
         help=(
-            f"Total euros earned over the last 12 months. Asset is FiT-locked under {fit_scheme} — "
-            f"earns €{fit_price:.0f}/MWh on every MWh until {fit_expiry}, regardless of wholesale market. "
-            "Wholesale spot fluctuations are NOT relevant to this asset's cash flow."
+            f"Total euros earned over the last 12 months. Italian utility-scale plants (>1 MW) under "
+            f"Conto Energia receive a DUAL revenue: (1) State-paid feed-in incentive at €{fit_price:.0f}/MWh on every "
+            f"MWh produced (until {fit_expiry}), PLUS (2) sale of the same energy on the wholesale market at zonal "
+            f"hourly spot price. Total = FiT × production + Σ(production_h × spot_h). "
+            f"FiT portion: €{fit_revenue_eur/1_000_000:.2f} M (locked). Spot sale portion: €{spot_revenue_eur/1_000_000:.2f} M (variable)."
             if is_fit_locked else
             "Total euros earned over the last 12 months. "
             "Computed by summing, for each hour : production_MWh × spot_price_EUR_per_MWh. "
@@ -1162,11 +1217,12 @@ if revenue_metrics:
         ),
     )
     r2.metric(
-        "Effective sale price (T12M)" + (" — FiT" if is_fit_locked else ""),
+        "Effective price (T12M)" + (" — FiT+spot" if is_fit_locked else ""),
         f"{revenue_metrics['effective_price_eur_mwh']:,.1f} €/MWh",
         help=(
-            f"Locked at the {fit_scheme} contracted strike price. Constant {fit_price:.0f} €/MWh on every MWh "
-            f"until {fit_expiry}. The State (or counterparty) absorbs the volatility — the asset is a fixed-income proxy."
+            f"FiT strike + production-weighted realised spot. = Total revenue / total production_MWh. "
+            f"Breakdown: €{fit_price:.0f}/MWh fixed FiT incentive (paid by State, until {fit_expiry}) "
+            + (f"+ €{spot_realized_price:.1f}/MWh from market sale (production-weighted = post-cannibalisation)." if spot_realized_price is not None else "+ market sale data unavailable.")
             if is_fit_locked else
             "The price actually realised on each MWh sold, weighted by when production happened. "
             "Formula : total_revenue / total_production_mwh. "
@@ -1176,39 +1232,38 @@ if revenue_metrics:
         ),
     )
     if is_fit_locked:
-        # For FiT-locked parks, show wholesale spot as informational context (not revenue-relevant)
-        _spot_for_context = None
-        if zone:
-            _wholesale = _fetch_period_prices_cached(zone, T12M_START.isoformat(), T12M_END.isoformat())
-            if _wholesale and _wholesale.get("prices_eur_mwh"):
-                _vp = [p for p in _wholesale["prices_eur_mwh"] if p is not None]
-                if _vp:
-                    _spot_for_context = sum(_vp) / len(_vp)
-        if _spot_for_context is not None:
-            _premium = (fit_price - _spot_for_context) / _spot_for_context * 100.0
+        # Show market sale spot avg + cannibalisation (applies to spot portion only)
+        if spot_simple_avg is not None and spot_realized_price is not None:
             r3.metric(
-                "Wholesale spot avg (info)",
-                f"{_spot_for_context:.1f} €/MWh",
-                delta=f"FiT premium +{_premium:.0f}%",
+                "Spot day-ahead avg",
+                f"{spot_simple_avg:.1f} €/MWh",
+                delta=f"realised on prod: {spot_realized_price:.1f}",
                 delta_color="off",
                 help=(
-                    f"Average wholesale day-ahead spot price on zone {zone} over T12M. "
-                    f"INFORMATIVE ONLY — the asset earns the FiT (€{fit_price:.0f}/MWh), "
-                    f"not the wholesale price. The {_premium:.0f}% premium is what the FiT contract is worth above merchant exposure. "
-                    "If the FiT expires (2030 for Manzano, 2031 for SiSen), the asset reverts to wholesale and revenue likely halves."
+                    f"Simple time-average of zone {zone} hourly day-ahead spot prices over the {spot_hours_covered:,} hours covered. "
+                    f"The 'realised on prod' delta shows the production-weighted average ({spot_realized_price:.1f} €/MWh) — "
+                    f"what the plant actually earned per MWh on the SPOT portion of its revenue (not counting FiT). "
+                    "Lower than the simple average because solar concentrates production in low-price hours (cannibalisation)."
+                ),
+            )
+            cann_spot = (spot_realized_price - spot_simple_avg) / spot_simple_avg * 100.0
+            r4.metric(
+                "Spot cannibalisation",
+                f"{cann_spot:+.1f} %",
+                help=(
+                    "Cannibalisation on the SPOT portion of revenue only. "
+                    "FiT portion (~€" + f"{fit_price:.0f}" + "/MWh) is locked and NOT cannibalised — paid on every MWh regardless of hour. "
+                    f"Spot side captures Italian solar penetration effect: realised €{spot_realized_price:.1f}/MWh vs simple avg €{spot_simple_avg:.1f}/MWh. "
+                    "When FiT expires, total revenue drops to spot-only and cannibalisation becomes the entire risk."
                 ),
             )
         else:
-            r3.metric("Wholesale spot avg (info)", "—", help="Wholesale data not available on this zone window.")
-        r4.metric(
-            "Cannibalisation (T12M)",
-            "N/A",
-            help=(
-                "Cannibalisation does NOT apply to FiT-locked assets. The State guarantees the strike price on every MWh "
-                "regardless of when it's produced, so the time-weighting effect that hurts merchant solar parks is neutralised. "
-                "For these vintage Italian assets (Conto Energia 2010-2013), cannibalisation risk only appears post-FiT-expiry."
-            ),
-        )
+            r3.metric("Spot day-ahead avg", "—", help=(
+                f"Wholesale spot data unavailable for zone {zone or '—'} on this T12M window. "
+                "energy-charts.info has limited Italian zone coverage (IT-North data only from Oct 2025). "
+                "Total revenue shown is FiT-only — actual revenue is higher (FiT + market sale) but missing market data."
+            ))
+            r4.metric("Spot cannibalisation", "N/A", help="Spot data unavailable.")
     else:
         r3.metric(
             "Day-ahead avg (T12M)",
@@ -2051,15 +2106,27 @@ if bt_recent and bt_old:
     daily_rev_eur: list[float | None] = []
     if revenue_metrics and (period_prices and period_prices.get("prices_eur_mwh") or fallback_price is not None):
         if period_prices and period_prices.get("prices_eur_mwh"):
-            hp = period_prices["prices_eur_mwh"]
+            hp_raw = period_prices["prices_eur_mwh"]
+            # Pad/truncate to match production length (handles partial zone coverage e.g. IT-North)
+            hk_len = len(hourly_data["hourly_production_kwh"])
+            if len(hp_raw) < hk_len:
+                hp = list(hp_raw) + [None] * (hk_len - len(hp_raw))
+            else:
+                hp = list(hp_raw[:hk_len])
         else:
             hp = [fallback_price or 0.0] * len(hourly_data["hourly_production_kwh"])
         hk = hourly_data["hourly_production_kwh"]
+        # For FiT-locked parks, daily revenue includes both FiT (constant) AND spot
         for d in range(len(daily_mwh_t12m)):
             i0 = d * 24
-            i1 = i0 + 24
-            rev = sum((hk[i] / 1000.0) * (hp[i] if hp[i] is not None else 0.0) for i in range(i0, min(i1, len(hk))))
-            daily_rev_eur.append(rev)
+            i1 = min(i0 + 24, len(hk))
+            day_kwh = sum(hk[i] for i in range(i0, i1))
+            day_spot = sum(
+                (hk[i] / 1000.0) * (hp[i] if hp[i] is not None else 0.0)
+                for i in range(i0, i1)
+            )
+            day_fit = (day_kwh / 1000.0) * fit_price if is_fit_locked else 0.0
+            daily_rev_eur.append(day_spot + day_fit)
 
     # When only a flat fallback price is available, the revenue line is just
     # the production line × constant — colinear and visually misleading.
