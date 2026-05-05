@@ -372,6 +372,47 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
   text-align: center !important;
 }
 
+.atlas-links {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.atlas-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  text-decoration: none;
+  border: 1px solid rgba(232, 228, 214, 0.14);
+  border-radius: 3px;
+  background: rgba(232, 228, 214, 0.02);
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.atlas-link:hover,
+.atlas-link:focus-visible {
+  color: var(--text-primary);
+  border-color: rgba(232, 228, 214, 0.32);
+  background: rgba(232, 228, 214, 0.05);
+  text-decoration: none;
+  outline: none;
+}
+
+.atlas-link svg {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.atlas-link:hover svg,
+.atlas-link:focus-visible svg {
+  opacity: 1;
+}
+
 /* ---- Atlas key figures — inline pill bar (replaces generic 3 cards) ---- */
 .atlas-kpis {
   display: flex;
