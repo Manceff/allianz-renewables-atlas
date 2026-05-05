@@ -20,12 +20,27 @@ venv/
 # Tests
 .pytest_cache/
 
-# Agent runtime logs (gardés en local, pas commit)
-.agent/run-*.log
-.agent/phase*.log
-.agent/resume-*.log
+# Agent runtime artifacts (kept local, never committed)
+.agent/
 .gitnexus
 
-# Claude Code local config (settings.local.json + cached skills)
+# Claude Code local config + worktrees
 .claude/settings.local.json
 .claude/skills/
+.claude/worktrees/
+
+# Local dev artifacts (Playwright runs, ad-hoc audits)
+.playwright-mcp/
+AGENTS.md
+AUDIT_REPORT.md
+run-overnight.sh
+
+# Iterative screenshots in repo root — committed assets live in docs/screenshots/
+/v[0-9]*.png
+/v[0-9]*.jpeg
+/globe-*.png
+/polish-*.png
+
+# Cached weather + price + pvlib data (regenerated on demand)
+data/electricity_prices/
+data/production_pvlib/

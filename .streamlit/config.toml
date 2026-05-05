@@ -1,10 +1,9 @@
 [theme]
-# JARVIS / Tesla console / Apple Vision Pro vibe — dark + cyan calme
 base = "dark"
-primaryColor = "#7dd3fc"
-backgroundColor = "#0a0e1a"
-secondaryBackgroundColor = "#141b2e"
-textColor = "#e2e8f0"
+primaryColor = "#e8e4d6"
+backgroundColor = "#07090c"
+secondaryBackgroundColor = "#0d1015"
+textColor = "#e8e4d6"
 font = "sans serif"
 
 [browser]
@@ -12,4 +11,4 @@ gatherUsageStats = false
 
 [server]
 headless = true
-runOnSave = true
+runOnSave = false
