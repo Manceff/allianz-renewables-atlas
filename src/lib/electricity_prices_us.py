@@ -33,7 +33,10 @@ ERCOT_HUB_BY_ZONE = {
 def fetch_caiso_period_prices(zone: str, start: _dt.date, end: _dt.date) -> dict[str, Any] | None:
     """Fetch hourly day-ahead LMP for a CAISO trading hub between start and end.
 
-    Returns dict with hourly arrays in USD/MWh, or None on failure.
+    Returns dict with hourly arrays in USD/MWh, or None on failure. Tries the
+    requested window first, then walks back up to 7 days if OASIS returns nothing
+    (weekends, holidays, or transient publishing gaps can leave today/yesterday
+    empty even when the endpoint itself is healthy).
     """
     hub = CAISO_HUB_BY_ZONE.get(zone)
     if not hub:
@@ -42,14 +45,28 @@ def fetch_caiso_period_prices(zone: str, start: _dt.date, end: _dt.date) -> dict
     try:
         from gridstatus import CAISO
         caiso = CAISO()
-        df = caiso.get_lmp(
-            start=start, end=end,
-            market="DAY_AHEAD_HOURLY",
-            locations=[hub],
-        )
     except Exception as e:
-        logger.warning("CAISO LMP fetch failed: %s", e)
+        logger.warning("CAISO import failed: %s", e)
         return None
+
+    # Try the original window, then progressively earlier windows. CAISO DAM
+    # publishes ~13:00 PT day-ahead, so on Streamlit Cloud (UTC) we sometimes
+    # query before publication; falling back one or two days fixes it.
+    df = None
+    for offset in range(0, 7):
+        try_start = start - _dt.timedelta(days=offset)
+        try_end = end - _dt.timedelta(days=offset)
+        try:
+            df = caiso.get_lmp(
+                start=try_start, end=try_end,
+                market="DAY_AHEAD_HOURLY",
+                locations=[hub],
+            )
+        except Exception as e:
+            logger.warning("CAISO LMP fetch failed (offset=%d): %s", offset, e)
+            df = None
+        if df is not None and not df.empty:
+            break
 
     if df is None or df.empty:
         return None

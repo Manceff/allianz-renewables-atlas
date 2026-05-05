@@ -405,8 +405,8 @@ st.markdown(
       <p class="atlas-tag">
         Projet personnel initi&eacute; par Mancef Ferrah dans le cadre d'une
         candidature en alternance Investment Management. Atlas exploratoire
-        des parcs solaires actifs d'Allianz Capital Partners, identifi&eacute;s
-        via sources publiques uniquement.
+        de parcs solaires associ&eacute;s &agrave; Allianz Capital Partners,
+        identifi&eacute;s via sources publiques uniquement.
       </p>
     </div>
     """,
@@ -1562,12 +1562,20 @@ elif live_spot and live_spot.get("price_eur_mwh") is not None:
     else:
         l5.metric("Revenue/h (live)", "—")
 elif _is_us_caiso:
-    # CAISO SP15 (Lotus) — real LMP via gridstatus.OASIS, USD native
+    # CAISO SP15 (Lotus) — real LMP via gridstatus.OASIS, USD native.
+    # Cache only successful results; a None failure is NOT cached so the next
+    # page reload retries OASIS instead of being stuck on stale "—".
     @st.cache_data(ttl=900, show_spinner=False)
-    def _fetch_caiso_live_cached(zone: str) -> dict | None:
-        return fetch_caiso_current_spot(zone)
+    def _fetch_caiso_live_cached(zone: str) -> dict:
+        result = fetch_caiso_current_spot(zone)
+        if result is None:
+            raise RuntimeError("OASIS returned no data")
+        return result
 
-    caiso_live = _fetch_caiso_live_cached(_us_zone)
+    try:
+        caiso_live = _fetch_caiso_live_cached(_us_zone)
+    except Exception:
+        caiso_live = None
     if caiso_live and caiso_live.get("price_usd_mwh") is not None:
         usd_spot = caiso_live["price_usd_mwh"]
         l4.metric(
@@ -1591,16 +1599,21 @@ elif _is_us_caiso:
         else:
             l5.metric("Revenue/h (live est.)", "—")
     else:
-        # CAISO fetch failed (transient OASIS outage) → show "—" honestly.
+        # CAISO fetch failed → show "—" honestly with full diagnostic.
         l4.metric(
             "Spot price (CAISO SP15)",
             "—",
             delta="OASIS unavailable",
             delta_color="off",
             help=(
-                "CAISO OASIS public endpoint did not return data on this query — could be a transient "
-                "rate-limit or OASIS outage. Try refreshing the page in a few minutes. "
-                "No flat proxy shown to avoid misleading numbers."
+                "CAISO OASIS (oasis.caiso.com) did not return LMP data for the trading hub "
+                "TH_SP15_GEN-APND on this query. Three known causes: "
+                "(1) transient OASIS rate-limit on shared cloud IPs, "
+                "(2) DAM not yet published for the requested day (CAISO publishes the next-day "
+                "market around 13:00 Pacific), "
+                "(3) outbound HTTP blocked by the host network — gridstatus uses plain HTTP. "
+                "The fetcher walks back up to 7 days automatically; if all 7 fail, OASIS is the "
+                "bottleneck. Refresh the page in 5-10 min. No flat proxy shown to avoid misleading numbers."
             ),
         )
         l5.metric("Revenue/h", "—", help="Spot price unavailable — see tooltip.")
