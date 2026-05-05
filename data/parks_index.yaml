@@ -23,23 +23,9 @@
 
 parks:
   # === ITALIE — Marché historique 2010-2013 ===
-
-  - id: project-brindisi-portfolio
-    name: "Project Brindisi Portfolio (10 sites <1 MW)"
-    country: IT
-    technology: solar
-    coordinates: [40.6383, 17.9350]  # Brindisi / Mesagne, Pouilles
-    capacity_mwp: 7.2
-    commissioning_year: 2010
-    operator: "Bluefield Revive Italia I Srl (depuis jan 2024)"
-    allianz_stake_pct: 100
-    acquisition_year: 2010
-    press_release_url: "https://elementsgreen.com/news/elements-green-successfully-completes-sale-of-italian-solar-portfolio-to-bluefield/"
-    notes: "Premier investissement solaire ACP S1 2010 sous Conto Energia. ACP a exit à une date INCONNUE pré-2024 ; Elements Green détenait l'asset 2009-2024 ; Bluefield Revive Italia I Srl l'a racheté à Elements Green en jan 2024 (~€30M, ratio ≈4.16M€/MW reflet du tarif d'achat italien lucratif). Possible structure pre-exit : ACP Limited Partner via holding allemande, Elements Green General Partner. Conservé pour traçabilité historique."
-    divested: true
-    divestment_note: "ACP exit date unknown pre-2024. Asset bought from Elements Green by Bluefield Revive Italia in Jan 2024 — Allianz was NOT the seller in that transaction."
-    has_pvgis_estimate: true
-    has_reported_production: false
+  # Note : Project Brindisi Portfolio (premier solar deal ACP 2010, 7.2 MWp)
+  # retiré de l'atlas en V26 — divested à date inconnue pré-2024 ;
+  # détenu par Bluefield Revive Italia I Srl depuis jan 2024.
 
   - id: manzano-solar
     name: "Manzano Solar Park"
@@ -52,7 +38,7 @@ parks:
     allianz_stake_pct: 100
     acquisition_year: 2010
     press_release_url: "https://www.pv-tech.org/ibc_solar_sells_11-2mw_italian_park_to_allianz_specialised_investments/"
-    notes: "Grid-connected 7 déc 2010, acquis par Allianz Specialised Investments. 47 000 modules polycrystalline + 3 600 thin-film sur 32 ha, Manzano (Udine, Frioul-VG). ~13 GWh/an. Évolution technologique vs Brindisi : utility-scale unique."
+    notes: "Grid-connected 7 déc 2010, acquis par Allianz Specialised Investments. 47 000 modules polycrystalline + 3 600 thin-film sur 32 ha, Manzano (Udine, Frioul-VG). ~13 GWh/an. Premier utility-scale ACP en Italie."
     has_pvgis_estimate: true
     has_reported_production: true
 
@@ -418,9 +404,9 @@ parks:
 
 # === MÉTADONNÉES PORTEFEUILLE ===
 metadata:
-  total_parks_mapped: 11
+  total_parks_mapped: 10
   total_parks_claimed_by_acp: 150  # corporate communication (incluant participations indirectes via fonds infra tiers)
-  capacity_total_mw: 1003.9  # somme des capacités gross park solaire uniquement
+  capacity_total_mw: 995.7  # somme des capacités gross park solaire uniquement (Brindisi 7.2 MWp retiré V26)
   countries_covered: ["IT", "PT", "FR", "US", "ES", "IE"]
   source_disclaimer: "V1 solaire PV uniquement, equity direct ACP / AllianzGI. Sources : ACP press archive, opérateurs partenaires, trade press (PV-Tech, Renewables Now), confirmé par recherche deep Gemini 2026-04-30. Hors périmètre : éolien, BESS, transmission, fonds infra tiers, proxy PPA / revenue swap."
   phase1_completed_on: "2026-04-30"
