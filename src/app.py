@@ -408,6 +408,13 @@ st.markdown(
         de parcs solaires associ&eacute;s &agrave; Allianz Capital Partners,
         identifi&eacute;s via sources publiques uniquement.
       </p>
+      <p class="atlas-disclaimer">
+        Tentative de mesure fond&eacute;e sur des hypoth&egrave;ses m&eacute;thodologiques
+        et des donn&eacute;es publiques (m&eacute;t&eacute;o ECMWF, prix ENTSO-E, tarifs r&eacute;glement&eacute;s,
+        mod&egrave;le pvlib). Les chiffres ne pr&eacute;tendent pas refl&eacute;ter la r&eacute;alit&eacute;
+        op&eacute;rationnelle exacte des sites — d&eacute;marche d'exploration et de
+        d&eacute;monstration de raisonnement quantitatif, non un audit technique.
+      </p>
       <div class="atlas-links">
         <a class="atlas-link" href="https://github.com/Manceff/allianz-renewables-atlas"
            target="_blank" rel="noopener noreferrer">
