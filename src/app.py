@@ -400,12 +400,22 @@ def _build_satellite_html(
 
 st.markdown(
     """
-    <div style="text-align: center; padding: 1.2rem 0 0.6rem;">
-        <h1 style="margin: 0; font-size: 1.85rem; font-weight: 600; letter-spacing: -0.02em;">
+    <div style="text-align: center; padding: 1.2rem 0 0.6rem; max-width: 920px; margin: 0 auto;">
+        <h1 style="margin: 0; font-size: 1.95rem; font-weight: 600; letter-spacing: -0.02em;">
             Allianz Renewables Atlas
         </h1>
-        <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 0.35rem; letter-spacing: 0.04em;">
-            Solar PV assets owned directly by Allianz Capital Partners · 2010-2026
+        <p style="color: #cbd5e1; font-size: 1.0rem; margin-top: 0.55rem; line-height: 1.55; font-weight: 500;">
+            Plateforme d'estimation de la production des parcs solaires d'Allianz Capital Partners
+            identifiés publiquement (2010-2026).
+        </p>
+        <p style="color: #94a3b8; font-size: 0.82rem; margin-top: 0.45rem; line-height: 1.5; letter-spacing: 0.01em;">
+            Production reconstruite via pvlib + Open-Meteo (poste par poste, GPS exact),
+            revenue calculé sur les prix day-ahead réels (energy-charts.info ENTSO-E)
+            ou tarifs FiT contractuels (Conto Energia italien, RESS-2 irlandais).
+            <br>
+            <span style="color: #fbbf24;">Note :</span> portfolio Elgin Ireland (191 MWp, 16 sites) <b>exclu</b> de l'atlas —
+            forward sale signée déc 2023, panneaux pas encore construits ou raccordés au réseau,
+            production T12M non significative.
         </p>
     </div>
     """,
