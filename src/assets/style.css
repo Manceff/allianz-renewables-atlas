@@ -365,19 +365,19 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
 }
 
 .atlas-tag {
-  color: var(--text-secondary);
-  font-size: 0.92rem;
-  margin: 14px auto 10px;
-  max-width: 700px;
-  line-height: 1.6;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 12px auto 8px;
+  max-width: 640px;
+  line-height: 1.55;
   font-weight: 400;
-  letter-spacing: -0.003em;
+  letter-spacing: 0.005em;
 }
 
 .atlas-tag .tech {
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.84rem;
+  font-size: 0.72rem;
   letter-spacing: 0;
   font-weight: 500;
 }
@@ -385,24 +385,25 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
 .atlas-note {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.74rem;
-  color: var(--text-muted);
+  gap: 7px;
+  font-size: 0.65rem;
+  color: var(--text-faint);
   font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 0.01em;
-  margin: 4px 0 0;
+  letter-spacing: 0.02em;
+  margin: 2px 0 0;
 }
 
 .atlas-note-flag {
   color: var(--severity-amber);
-  font-size: 0.58rem;
+  font-size: 0.52rem;
   font-weight: 500;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  padding: 2px 7px;
-  border: 1px solid rgba(202, 138, 4, 0.45);
+  padding: 1px 6px;
+  border: 1px solid rgba(202, 138, 4, 0.35);
   border-radius: 2px;
   background: transparent;
+  opacity: 0.85;
 }
 
 /* ---- Atlas key figures — inline pill bar (replaces generic 3 cards) ---- */
