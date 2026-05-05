@@ -320,14 +320,14 @@ def _build_satellite_html(
         fillOpacity: isFocused ? 0.95 : (isEsbEnergised || isVerified ? 0.95 : 0.9),
       }}).addTo(map);
       let tags = '';
-      if (isOverridden) tags += '<span style="color:#7dd3fc; font-size:10px; margin-left:6px;">[corrected]</span>';
+      if (isOverridden) tags += '<span style="color:#7dd3fc; font-size:10px; margin-left:6px; letter-spacing:0.06em;">[CORRECTED]</span>';
       if (isEsbEnergised) {{
-        const dateLabel = s.esb_connect_date ? ' since ' + s.esb_connect_date : '';
-        tags += '<span style="color:#84cc16; font-size:10px; margin-left:6px; font-weight:600;">⚡ ENERGISED' + dateLabel + '</span>';
+        const dateLabel = s.esb_connect_date ? ' · ' + s.esb_connect_date : '';
+        tags += '<span style="color:#84cc16; font-size:10px; margin-left:6px; font-weight:600; letter-spacing:0.08em;">ENERGISED' + dateLabel + '</span>';
       }} else if (isVerified) {{
-        tags += '<span style="color:#84cc16; font-size:10px; margin-left:6px; font-weight:600;">✅ BUILT</span>';
+        tags += '<span style="color:#84cc16; font-size:10px; margin-left:6px; font-weight:600; letter-spacing:0.08em;">BUILT</span>';
       }}
-      const offerLine = s.offer_type ? '<div style="color: #fbbf24; font-size: 10px; margin-top: 2px;">⚠ ' + s.offer_type + ' (non-firm, curtailment risk)</div>' : '';
+      const offerLine = s.offer_type ? '<div style="color: #eab308; font-size: 10px; margin-top: 2px; letter-spacing:0.04em;">' + s.offer_type + ' · non-firm, curtailment risk</div>' : '';
       marker.bindPopup(
         '<div style="font-family: Geist, sans-serif; font-size: 12px; min-width: 200px;">' +
         '<div style="font-weight: 600; color: #f1f5f9; margin-bottom: 3px;">' + s.name + tags + '</div>' +
@@ -481,7 +481,7 @@ if not selected_park_id:
     st.markdown(
         """
         <div class="empty-hint">
-          <span class="empty-prompt">▸</span> Click a marker on the globe to open
+          <span class="empty-prompt">—</span> Click a marker on the globe to open
           satellite imagery and pvlib production analysis.
         </div>
         """,
@@ -560,7 +560,7 @@ if _is_forward_sale:
           font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
           color: #cbd5e1; line-height: 1.55;">
           <div style="font-weight: 600; color: #7dd3fc; margin-bottom: 6px; letter-spacing: 0.04em;">
-            ▸ FORWARD-SALE PORTFOLIO — PARTIAL ENERGIZATION IN PROGRESS
+            FORWARD-SALE PORTFOLIO — PARTIAL ENERGIZATION IN PROGRESS
           </div>
           Allianz acquired this {n_subs}-site portfolio in <b>December 2023</b> as a forward sale :
           permits + EirGrid grid-connection rights + RESS-2/3 state-secured revenue contracts.
@@ -568,7 +568,7 @@ if _is_forward_sale:
           <b>{n_energised} of {n_subs} sites are physically grid-connected</b>
           ({mw_energised:.1f} MWac active), {n_contracted} sites still contracted.
           <br><br>
-          <span style="color: #fbbf24;">⚠️ Curtailment risk :</span> the energised sites operate under
+          <span style="color: #fbbf24;">Curtailment risk:</span> the energised sites operate under
           <b>Non GPA / ECP-2.1</b> (non-firm) access — EirGrid may reduce output without compensation
           during grid congestion until network reinforcements ~2029-2030.
           <br><br>
@@ -714,7 +714,7 @@ if _is_forward_sale:
               border-radius: 4px;
               font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
               color: #cbd5e1; letter-spacing: 0.02em;">
-              <span style="color: #84cc16; font-weight: 600;">▸ CURRENTLY PRODUCING (ESB Networks Q4 2025 confirmed)</span>
+              <span style="color: #84cc16; font-weight: 600;">CURRENTLY PRODUCING (ESB Networks Q4 2025 confirmed)</span>
               &nbsp;&nbsp;
               <b style="color:#f1f5f9;">{energised_count}/{len(_park_model_for_status.sub_sites or [])} sites</b>
               &nbsp;·&nbsp; {energised_mw_ac:.1f} MW (AC)
@@ -737,9 +737,9 @@ if _is_forward_sale:
               border-radius: 4px;
               font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
               color: #94a3b8; letter-spacing: 0.02em;">
-              ▸ <span style="color: #cbd5e1;">No site visually confirmed built yet.</span>
+              <span style="color: #cbd5e1;">No site visually confirmed built yet.</span>
               Click a site button below, open in Google Maps satellite,
-              and toggle "✅ I see panels here" if you spot the panel array.
+              and toggle "Confirm built" if you spot the panel array.
               Currently confirmed sites will accrue MWh / revenue here.
             </div>
             """,
@@ -767,9 +767,9 @@ if _is_forward_sale:
         is_verified_user = bool(_verified_for_park.get(s.name))
         # ESB authoritative wins; user verified is a fallback indicator
         if is_energised:
-            built_marker = "⚡"
+            built_marker = "ENERGISED"
         elif is_verified_user:
-            built_marker = "✅"
+            built_marker = "BUILT"
         else:
             built_marker = "—"
         rows.append({
@@ -842,7 +842,7 @@ if _is_forward_sale:
     _focused_idx_fs = st.session_state.get(_focus_key_fs)
 
     _per_row_fs = 6
-    _items_fs = [("◉ Overview", None)] + [(s["name"], i) for i, s in enumerate(_sub_sites_payload_fs)]
+    _items_fs = [("Overview", None)] + [(s["name"], i) for i, s in enumerate(_sub_sites_payload_fs)]
     for _row_start in range(0, len(_items_fs), _per_row_fs):
         _row = _items_fs[_row_start : _row_start + _per_row_fs]
         _cols = st.columns(_per_row_fs)
@@ -881,7 +881,7 @@ if _is_forward_sale:
         _verified_tag = (
             '<span style="color:#84cc16; font-weight:600; margin-left:10px; '
             'background:rgba(132,204,22,0.15); padding:2px 8px; border-radius:4px; font-size:0.72rem;">'
-            '✅ VERIFIED BUILT</span>'
+            'VERIFIED BUILT</span>'
             if _fs_pt["is_verified_built"] else ""
         )
         st.markdown(
@@ -891,7 +891,7 @@ if _is_forward_sale:
               border-radius: 8px;
               font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
               color: #cbd5e1; letter-spacing: 0.02em;">
-              <span style="color: #84cc16; font-weight: 600;">▸ {_fs_pt['name']}</span>{_verified_tag}
+              <span style="color: #84cc16; font-weight: 600;">{_fs_pt['name']}</span>{_verified_tag}
               &nbsp;·&nbsp; Co. {_fs_pt['county']} &nbsp;·&nbsp; {_fs_pt['capacity_mw']:.1f} MW &nbsp;·&nbsp;
               <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs_pt['lat']}, {_fs_pt['lon']}</code>
               <div style="margin-top: 6px; font-size: 0.72rem;">
@@ -902,17 +902,17 @@ if _is_forward_sale:
             unsafe_allow_html=True,
         )
 
-        # Toggle "✅ I see panels here" / "❌ Not built yet"
+        # Toggle "Confirm built" / "Mark not built"
         _vbtn_cols = st.columns([3, 1])
         _verified_now = _fs_pt["is_verified_built"]
-        _btn_label = "❌ Mark as not built" if _verified_now else "✅ I see panels here — mark as built"
+        _btn_label = "Mark not built" if _verified_now else "Confirm built"
         _btn_help = (
             "This site is currently flagged as visually confirmed built. "
             "Click to remove the flag if it was a mistake."
             if _verified_now else
             "After checking Google Maps satellite at the coords above and confirming you see the panel array, "
             "click this button. The site contributes to the 'Currently confirmed built' subset metrics, "
-            "the marker turns green on the map, and the per-site table shows ✅."
+            "the marker turns green on the map, and the per-site table shows BUILT."
         )
         _vbtn_cols[0].caption(_btn_help)
         if _vbtn_cols[1].button(
@@ -1049,7 +1049,7 @@ if _park_model_for_status and _park_model_for_status.divested:
           border-radius: 6px;
           font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
           color: #fecaca; line-height: 1.5;">
-          <span style="color: #f87171; font-weight: 600; letter-spacing: 0.04em;">▸ DIVESTED ASSET — HISTORICAL TRACEABILITY ONLY</span>
+          <span style="color: #f87171; font-weight: 600; letter-spacing: 0.04em;">DIVESTED ASSET — HISTORICAL TRACEABILITY ONLY</span>
           <div style="margin-top: 4px; color: #cbd5e1;">
             {_park_model_for_status.divestment_note or "Allianz no longer owns this asset."}
           </div>
@@ -1168,7 +1168,7 @@ _focus_key = f"sat-focus-{selected_park_id}"
 _focused_idx: int | None = st.session_state.get(_focus_key)
 if _sub_sites_payload:
     _per_row = 6
-    _items: list[tuple[str, int | None]] = [("◉ Overview", None)] + [
+    _items: list[tuple[str, int | None]] = [("Overview", None)] + [
         (s["name"], i) for i, s in enumerate(_sub_sites_payload)
     ]
     for _row_start in range(0, len(_items), _per_row):
@@ -1233,11 +1233,11 @@ if _sub_sites_payload and _focused_idx is not None and 0 <= _focused_idx < len(_
             border-radius: 8px;
             font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
             color: #cbd5e1; letter-spacing: 0.02em;">
-          <span style="color: #84cc16; font-weight: 600;">▸ {_fs['name']}</span>{_override_tag}
+          <span style="color: #84cc16; font-weight: 600;">{_fs['name']}</span>{_override_tag}
           &nbsp;·&nbsp; Co. {_fs['county']} &nbsp;·&nbsp; {_fs['capacity_mw']:.1f} MW &nbsp;·&nbsp;
           <code style="color: #f1f5f9; background: rgba(232, 228, 214, 0.08); padding: 1px 6px; border-radius: 3px;">{_fs['lat']}, {_fs['lon']}</code>
           <div style="margin-top: 6px; font-size: 0.72rem;">
-            <span style="color: #84cc16;">▸ Double-click on the panels to save new coords.</span>
+            <span style="color: #84cc16;">Double-click on the panels to save new coords.</span>
             <a href="{_gmaps}" target="_blank" style="color: #7dd3fc; margin-left: 14px; margin-right: 14px;">Open in Google Maps ↗</a>
             <a href="{_osm}" target="_blank" style="color: #7dd3fc; margin-right: 14px;">OSM ↗</a>
             <a href="{_overpass}" target="_blank" style="color: #7dd3fc;">Overpass query ↗</a>
@@ -1298,13 +1298,18 @@ _night_caption_extra = (
     if _is_night_at_park else ""
 )
 
-_time_badge_color = "#fbbf24" if _is_night_at_park else "#84cc16"
+_time_badge_color = "#eab308" if _is_night_at_park else "#a8a294"
+_time_badge_state = "OFF" if _is_night_at_park else "ON"
 _time_badge_html = (
-    f'<span style="display:inline-block; margin-left:14px; padding:4px 12px; '
-    f'background:rgba(132,204,22,0.12); border:1px solid {_time_badge_color}55; '
-    f'border-radius:6px; font-family:\'JetBrains Mono\', monospace; font-size:0.95rem; '
-    f'font-weight:600; color:{_time_badge_color}; letter-spacing:0.04em;">'
-    f'🕒 {_park_local_hour_label} local at park</span>'
+    f'<span style="display:inline-flex; align-items:center; gap:10px; margin-left:18px; padding:4px 12px; '
+    f'background:rgba(168,162,148,0.06); border:1px solid rgba(168,162,148,0.18); '
+    f'border-radius:3px; font-family:\'JetBrains Mono\', monospace; font-size:0.78rem; '
+    f'font-weight:500; color:{_time_badge_color}; letter-spacing:0.05em;">'
+    f'<span style="font-size:0.6rem; opacity:0.7; letter-spacing:0.18em;">PARK LOCAL</span>'
+    f'<span style="font-feature-settings:\'tnum\'; font-size:0.92rem; font-weight:500;">{_park_local_hour_label}</span>'
+    f'<span style="font-size:0.62rem; padding:1px 5px; background:rgba({"234,179,8" if _is_night_at_park else "168,162,148"},0.15); '
+    f'border-radius:2px; letter-spacing:0.1em;">{_time_badge_state}</span>'
+    f'</span>'
 )
 st.markdown(
     f"""
@@ -1492,7 +1497,7 @@ if spot_context and spot_context.get("warn"):
             font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
             color: #cbd5e1; line-height: 1.5;">
           <div style="font-weight: 600; color: #f1f5f9; margin-bottom: 4px; letter-spacing: 0.04em;">
-            ▸ {title}
+            {title}
           </div>
           {spot_context['explain']}
         </div>
