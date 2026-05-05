@@ -207,7 +207,7 @@ def _fetch_live_weather_cached(lat: float, lon: float) -> dict | None:
     return fetch_current_weather(lat, lon)
 
 
-@st.cache_data(ttl=1800, show_spinner=False)  # 30 min refresh
+@st.cache_data(ttl=900, show_spinner=False)  # 15 min refresh — matches energy-charts 15-min slot resolution
 def _fetch_live_spot_cached(zone: str) -> dict | None:
     return fetch_current_spot_price(zone)
 
@@ -1448,47 +1448,91 @@ else:
 
 spot_context = None
 _live_fallback_price = get_fallback_price(selected_park_id)
-# For FiT-locked assets, show the FiT strike directly instead of wholesale spot
+
+
+def _local_time_str(iso_utc: str) -> str:
+    """Convert UTC ISO timestamp to a 'HH:MM local (HH:MM UTC)' string."""
+    if not iso_utc:
+        return "—"
+    try:
+        from datetime import datetime as _dt_loc
+        dt_utc = _dt_loc.fromisoformat(iso_utc.replace("Z", "+00:00"))
+        local = dt_utc.astimezone()
+        local_str = local.strftime("%H:%M")
+        utc_str = dt_utc.strftime("%H:%M")
+        if local_str == utc_str:
+            return f"{utc_str} UTC"
+        return f"{local_str} ({utc_str} UTC)"
+    except (ValueError, TypeError):
+        return iso_utc[:16].replace("T", " ")
+
+
+# Italian Conto Energia: dual revenue (state-paid FiT + wholesale market sale).
+# Show the COMBINED €/MWh and revenue/h, refreshed every 15 min via live spot.
 if is_fit_locked:
+    spot_addon = 0.0
+    spot_addon_label = "FiT only (spot unavailable)"
+    spot_time_label = ""
+    if live_spot and live_spot.get("price_eur_mwh") is not None:
+        spot_addon = live_spot["price_eur_mwh"]
+        spot_time_label = _local_time_str(live_spot.get("time_iso", ""))
+        spot_addon_label = f"+ {spot_addon:.0f} spot @ {spot_time_label}"
+    total_price_now = fit_price + spot_addon
     l4.metric(
-        "Effective price (FiT)",
-        f"{fit_price:.0f} €/MWh",
-        delta="locked",
+        "Realised €/MWh (FiT + spot)",
+        f"{total_price_now:.0f} €/MWh",
+        delta=spot_addon_label,
         delta_color="off",
         help=(
-            f"Asset is FiT-locked under {fit_scheme}. The State pays this fixed price on every MWh produced "
-            f"until {fit_expiry}. Wholesale spot is irrelevant for revenue. Live wholesale spot shown in 'Today's spot curve' below for context."
+            f"Italian Conto Energia plants >1 MW receive TWO payments per MWh produced: "
+            f"(1) a state-secured incentive of €{fit_price:.0f}/MWh, locked until {fit_expiry}, "
+            f"plus (2) the wholesale market sale at the current zonal spot. "
+            f"Right now: FiT €{fit_price:.0f}/MWh + spot €{spot_addon:.0f}/MWh "
+            f"= total €{total_price_now:.0f}/MWh. Spot refreshes every 15 min."
         ),
     )
     if live_weather:
-        revenue_now = estimated_mw * fit_price
+        revenue_now = estimated_mw * total_price_now
         l5.metric(
-            "Revenue/h (live est.)",
+            "Revenue/h (live)",
             f"€ {revenue_now:,.0f}",
-            help=f"Live output × FiT strike ({fit_price:.0f} €/MWh) × 1 hour. Locked in by Conto Energia until {fit_expiry}.",
+            delta=f"@ {total_price_now:.0f} €/MWh",
+            delta_color="off",
+            help=(
+                f"Live output ({estimated_mw:.2f} MW) × realised price (FiT + current spot, "
+                f"€{total_price_now:.0f}/MWh). Updates every 15 min."
+            ),
         )
     else:
-        l5.metric("Revenue/h (live est.)", "—")
+        l5.metric("Revenue/h (live)", "—")
 elif live_spot and live_spot.get("price_eur_mwh") is not None:
     spot_price = live_spot["price_eur_mwh"]
     spot_context = interpret_spot_price(spot_price, live_zone)
+    _spot_time_label = _local_time_str(live_spot.get("time_iso", ""))
     l4.metric(
         "Spot price (live)",
         f"{spot_price:,.1f} €/MWh",
         delta=spot_context["label"],
         delta_color="off",
-        help=f"Day-ahead zone {live_zone} · {live_spot['time_iso'][:16]} UTC · source energy-charts.info",
+        help=(
+            f"Day-ahead zone {live_zone}, settled slot at {_spot_time_label}. "
+            "Source: energy-charts.info (ENTSO-E mirror). Refreshed every 15 min, slots are 15-min wide since Oct 2025."
+        ),
     )
-
     if live_weather:
-        revenue_now = estimated_mw * spot_price  # €/h (MW × €/MWh × 1h)
+        revenue_now = estimated_mw * spot_price
         l5.metric(
-            "Revenue/h (live est.)",
+            "Revenue/h (live)",
             f"€ {revenue_now:,.0f}",
-            help="Live output estimate × current spot price × 1 hour. Indicative only.",
+            delta=f"@ {spot_price:.0f} €/MWh",
+            delta_color="off",
+            help=(
+                f"Live output ({estimated_mw:.2f} MW) × current spot ({spot_price:.1f} €/MWh) × 1 hour. "
+                "Updates every 15 min."
+            ),
         )
     else:
-        l5.metric("Revenue/h (live est.)", "—")
+        l5.metric("Revenue/h (live)", "—")
 elif _is_us_caiso:
     # CAISO SP15 (Lotus) — real LMP via gridstatus.OASIS, USD native
     @st.cache_data(ttl=900, show_spinner=False)
