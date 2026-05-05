@@ -454,6 +454,64 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
   margin-right: 8px;
 }
 
+/* ---- How-to panel — shown until a park is selected ---------------- */
+.howto-panel {
+  max-width: 720px;
+  margin: 1.6rem auto 1.2rem;
+  padding: 22px 26px 24px;
+  border: 1px solid rgba(232, 228, 214, 0.10);
+  border-radius: 4px;
+  background: rgba(232, 228, 214, 0.025);
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.howto-panel .howto-title {
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.howto-panel .howto-body {
+  color: var(--text-base);
+  margin-bottom: 14px;
+}
+
+.howto-panel .howto-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+}
+
+.howto-panel .howto-list li {
+  padding: 4px 0;
+  border-left: 1px solid rgba(232, 228, 214, 0.10);
+  padding-left: 14px;
+  margin-bottom: 2px;
+}
+
+.howto-panel .howto-key {
+  display: inline-block;
+  min-width: 130px;
+  color: var(--accent);
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.howto-panel .howto-foot {
+  font-size: 0.74rem;
+  color: var(--text-faint, var(--text-muted));
+  opacity: 0.75;
+  border-top: 1px solid rgba(232, 228, 214, 0.06);
+  padding-top: 12px;
+  margin-top: 6px;
+}
+
 /* ---- Spacing utility ---------------------------------------------- */
 .vspace { height: 18px; }
 .vspace-lg { height: 28px; }

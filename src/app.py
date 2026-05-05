@@ -479,9 +479,23 @@ selected_park_id = st.session_state.get("selected_park_id")
 if not selected_park_id:
     st.markdown(
         """
-        <div class="empty-hint">
-          <span class="empty-prompt">—</span> Click a marker on the globe to open
-          satellite imagery and pvlib production analysis.
+        <div class="howto-panel">
+          <div class="howto-title">Mode d'emploi</div>
+          <div class="howto-body">
+            S&eacute;lectionnez un parc en cliquant sur l'un des marqueurs du globe ci-dessus.
+            Le panneau d&eacute;tail s'ouvre alors avec, pour le parc choisi&nbsp;:
+          </div>
+          <ul class="howto-list">
+            <li><span class="howto-key">Live</span> production et prix spot temps r&eacute;el, rafra&icirc;chis chaque quart d'heure</li>
+            <li><span class="howto-key">Production today</span> courbe horaire reconstruite depuis le lever du soleil</li>
+            <li><span class="howto-key">Time series</span> s&eacute;rie de production sur les 12 derniers mois</li>
+            <li><span class="howto-key">Revenue</span> chiffre d'affaires r&eacute;alis&eacute; sur 12 mois, prix spot horaires ou tarif r&eacute;glement&eacute;</li>
+          </ul>
+          <div class="howto-foot">
+            Toutes les m&eacute;triques sont reconstruites &agrave; partir de donn&eacute;es publiques&nbsp;:
+            m&eacute;t&eacute;o ECMWF (Open-Meteo), prix day-ahead ENTSO-E, LMP CAISO OASIS,
+            mod&egrave;le solaire pvlib aux coordonn&eacute;es exactes du parc.
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
