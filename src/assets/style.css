@@ -361,9 +361,9 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
 
 .atlas-tag {
   color: var(--text-secondary);
-  font-size: 0.82rem;
-  margin: 18px auto 0 !important;
-  max-width: 560px;
+  font-size: 0.98rem;
+  margin: 22px auto 0 !important;
+  max-width: 640px;
   width: 100%;
   line-height: 1.6;
   font-weight: 400;
@@ -373,22 +373,22 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
 }
 
 .atlas-disclaimer {
-  margin: 8px auto 0 !important;
-  max-width: 480px;
+  margin: 10px auto 0 !important;
+  max-width: 460px;
   width: 100%;
-  font-size: 0.54rem;
+  font-size: 0.48rem;
   font-style: italic;
   font-weight: 400;
   line-height: 1.45;
   letter-spacing: 0.005em;
   color: var(--text-muted);
-  opacity: 0.5;
+  opacity: 0.45;
   text-wrap: balance;
   text-align: center !important;
 }
 
 .atlas-links {
-  margin-top: 14px;
+  margin-top: 20px;
   display: flex;
   justify-content: center;
 }
@@ -396,16 +396,16 @@ p, span, label, [data-testid="stMarkdownContainer"] p {
 .atlas-link {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
+  gap: 10px;
+  padding: 8px 18px;
   font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.88rem;
   letter-spacing: 0.01em;
-  color: var(--text-muted);
+  color: var(--text-base);
   text-decoration: none;
-  border: 1px solid rgba(232, 228, 214, 0.14);
-  border-radius: 3px;
-  background: rgba(232, 228, 214, 0.02);
+  border: 1px solid rgba(232, 228, 214, 0.22);
+  border-radius: 4px;
+  background: rgba(232, 228, 214, 0.04);
   transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
