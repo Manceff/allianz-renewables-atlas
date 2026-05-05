@@ -1330,14 +1330,39 @@ live_weather = _fetch_live_weather_cached(
 live_zone = get_zone(selected_row["country"], park_id=selected_park_id)
 live_spot = _fetch_live_spot_cached(live_zone) if live_zone else None
 
+# Resolve park IANA timezone (country code → IANA, with US override since
+# CA/TX share country code "US"). Used to suffix every park-local timestamp
+# with the proper abbreviation (CEST, PDT, CDT, ...) so the user never has
+# to mentally translate from UTC.
+_COUNTRY_TZ = {
+    "IT": "Europe/Rome",
+    "PT": "Europe/Lisbon",
+    "FR": "Europe/Paris",
+    "ES": "Europe/Madrid",
+}
+_PARK_TZ_OVERRIDE = {
+    "lotus-solar-farm": "America/Los_Angeles",
+    "galloway-2": "America/Chicago",
+}
+_park_tz_name = _PARK_TZ_OVERRIDE.get(selected_park_id) or _COUNTRY_TZ.get(
+    selected_row["country"], "UTC"
+)
+try:
+    from zoneinfo import ZoneInfo as _ZIabbr
+    import datetime as _dtabbr
+    _park_tz_abbr = _dtabbr.datetime.now(_ZIabbr(_park_tz_name)).strftime("%Z") or _park_tz_name.split("/")[-1]
+except Exception:
+    _park_tz_abbr = _park_tz_name.split("/")[-1].replace("_", " ")
+
 # Resolve park's local time + day/night state to disambiguate "Sun = 0 W/m²"
 # from "data missing" — important for US parks where the user is often
 # checking from EU daytime but the panels are still in pre-dawn dark.
 _park_local_time = (live_weather or {}).get("time_iso", "")[:16] if live_weather else ""
 _park_local_hour_label = _park_local_time[-5:] if _park_local_time else "—"
+_park_local_hour_with_tz = f"{_park_local_hour_label} {_park_tz_abbr}" if _park_local_time else "—"
 _is_night_at_park = bool(live_weather) and live_weather["ghi_w_m2"] < 5.0
 _night_caption_extra = (
-    f" — <b style='color:#fbbf24;'>before sunrise / night at park ({_park_local_hour_label} local)</b>, panels not producing."
+    f" — <b style='color:#fbbf24;'>before sunrise / night at park ({_park_local_hour_with_tz})</b>, panels not producing."
     if _is_night_at_park else ""
 )
 
@@ -1348,7 +1373,7 @@ _time_badge_html = (
     f'background:rgba(168,162,148,0.06); border:1px solid rgba(168,162,148,0.18); '
     f'border-radius:3px; font-family:\'JetBrains Mono\', monospace; font-size:0.78rem; '
     f'font-weight:500; color:{_time_badge_color}; letter-spacing:0.05em;">'
-    f'<span style="font-size:0.6rem; opacity:0.7; letter-spacing:0.18em;">PARK LOCAL</span>'
+    f'<span style="font-size:0.6rem; opacity:0.7; letter-spacing:0.18em;">PARK LOCAL · {_park_tz_abbr}</span>'
     f'<span style="font-feature-settings:\'tnum\'; font-size:0.92rem; font-weight:500;">{_park_local_hour_label}</span>'
     f'<span style="font-size:0.62rem; padding:1px 5px; background:rgba({"234,179,8" if _is_night_at_park else "168,162,148"},0.15); '
     f'border-radius:2px; letter-spacing:0.1em;">{_time_badge_state}</span>'
@@ -1372,7 +1397,7 @@ if live_weather:
     cloud = live_weather["cloud_cover_pct"]
     cloud_label = "clear" if cloud < 25 else ("partly" if cloud < 75 else "overcast")
     if _is_night_at_park:
-        sun_delta = f"night at park ({_park_local_hour_label})"
+        sun_delta = f"night at park ({_park_local_hour_with_tz})"
     else:
         sun_delta = cloud_label
     l1.metric(
@@ -1382,7 +1407,7 @@ if live_weather:
         delta_color="off",
         help=(
             f"Global Horizontal Irradiance at the park's GPS coords, refreshed every 15 min by Open-Meteo. "
-            f"Park local time: {_park_local_hour_label}. Cloud cover {cloud:.0f}%. "
+            f"Park local time: {_park_local_hour_with_tz}. Cloud cover {cloud:.0f}%. "
             + (
                 "GHI is near zero because it's nighttime at the park. "
                 "When you're checking from Europe (e.g. 14:00 CET), Texas is at ~06:00 (just after sunrise), "
@@ -1448,22 +1473,6 @@ else:
 
 spot_context = None
 _live_fallback_price = get_fallback_price(selected_park_id)
-
-# Park timezone resolution. Country code → IANA TZ; US parks need an
-# override since CA (Pacific) and TX (Central) share country "US".
-_COUNTRY_TZ = {
-    "IT": "Europe/Rome",
-    "PT": "Europe/Lisbon",
-    "FR": "Europe/Paris",
-    "ES": "Europe/Madrid",
-}
-_PARK_TZ_OVERRIDE = {
-    "lotus-solar-farm": "America/Los_Angeles",
-    "galloway-2": "America/Chicago",
-}
-_park_tz_name = _PARK_TZ_OVERRIDE.get(selected_park_id) or _COUNTRY_TZ.get(
-    selected_row["country"], "UTC"
-)
 
 
 def _local_time_str(iso_utc: str, tz_name: str = _park_tz_name) -> str:
@@ -1776,11 +1785,11 @@ if _today_hw and _today_hw.get("timestamps"):
         ),
     )
     pt2.metric(
-        "Sunrise (local)",
+        f"Sunrise ({_park_tz_abbr})",
         _sunrise_label,
         delta=f"{_hours_since_sunrise} h ago" if _hours_since_sunrise else None,
         delta_color="off",
-        help="Local timezone of the park. First hour where estimated output > 0.05 MW today.",
+        help=f"Park local timezone: {_park_tz_name} ({_park_tz_abbr}). First hour where estimated output > 0.05 MW today.",
     )
     # Bar chart of today's hourly output
     import pandas as _pdpt
