@@ -78,6 +78,7 @@ def fetch_today_hourly_weather(lat: float, lon: float) -> dict[str, Any] | None:
         "latitude": lat,
         "longitude": lon,
         "hourly": "shortwave_radiation,temperature_2m,wind_speed_10m,is_day",
+        "current": "temperature_2m",  # forces a "current" block whose .time field is in local timezone
         "timezone": "auto",
         "forecast_days": 1,
         "past_days": 0,
@@ -98,25 +99,31 @@ def fetch_today_hourly_weather(lat: float, lon: float) -> dict[str, Any] | None:
     if not times or not ghi:
         return None
 
-    # Determine which hours are "past" relative to local now
+    # Determine which hours are "past" relative to local now.
+    # Open-Meteo `hourly.time` and `current.time` are both expressed in the
+    # location's local timezone (when `timezone: auto` is set), so we can
+    # compare them as naive datetimes.
     import datetime as _dt
     tz = payload.get("timezone", "UTC")
-    # Open-Meteo returns local-zone strings (e.g. "2026-05-05T14:00")
-    # Compare to current time at the same location
-    current_time_str = (payload.get("current_weather") or {}).get("time", "")
-    if not current_time_str:
-        # Fallback: assume "now" by best-effort
-        now_local = _dt.datetime.utcnow()
-    else:
+    current_time_str = (payload.get("current") or {}).get("time", "")
+    if current_time_str:
         try:
             now_local = _dt.datetime.fromisoformat(current_time_str)
         except ValueError:
-            now_local = _dt.datetime.utcnow()
+            now_local = None
+    else:
+        now_local = None
+    if now_local is None:
+        # Last-resort fallback: derive local time from UTC offset returned by API
+        utc_offset_sec = payload.get("utc_offset_seconds", 0) or 0
+        now_local = _dt.datetime.utcnow() + _dt.timedelta(seconds=utc_offset_sec)
 
     is_past = []
     for t in times:
         try:
             t_dt = _dt.datetime.fromisoformat(t)
+            # An hour is "past" if its start has been reached.
+            # E.g. at 13:53 local, the 13:00 hour is past (in progress / done).
             is_past.append(t_dt <= now_local)
         except ValueError:
             is_past.append(False)
