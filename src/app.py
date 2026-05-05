@@ -1266,36 +1266,63 @@ else:
 # LIVE STATUS — current weather + estimated output + current spot price
 # ---------------------------------------------------------------------------
 
-st.markdown(
-    """
-    <div class="section-header section-first section-live">
-      <span class="section-label">Live · right now</span>
-      <span class="section-caption">
-        Live snapshot · weather refreshed every 15 min (Open-Meteo) · spot price
-        from ENTSO-E day-ahead. Estimated MW = capacity × (GHI / 1000) × (1 − 14% loss) × temperature derating.
-      </span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
 live_weather = _fetch_live_weather_cached(
     float(selected_row["lat"]), float(selected_row["lon"])
 )
 live_zone = get_zone(selected_row["country"], park_id=selected_park_id)
 live_spot = _fetch_live_spot_cached(live_zone) if live_zone else None
 
+# Resolve park's local time + day/night state to disambiguate "Sun = 0 W/m²"
+# from "data missing" — important for US parks where the user is often
+# checking from EU daytime but the panels are still in pre-dawn dark.
+_park_local_time = (live_weather or {}).get("time_iso", "")[:16] if live_weather else ""
+_park_local_hour_label = _park_local_time[-5:] if _park_local_time else "—"
+_is_night_at_park = bool(live_weather) and live_weather["ghi_w_m2"] < 5.0
+_night_caption_extra = (
+    f" — <b style='color:#fbbf24;'>before sunrise / night at park ({_park_local_hour_label} local)</b>, panels not producing."
+    if _is_night_at_park else ""
+)
+
+st.markdown(
+    f"""
+    <div class="section-header section-first section-live">
+      <span class="section-label">Live · right now</span>
+      <span class="section-caption">
+        Live snapshot at the park's local time ({_park_local_hour_label}) · weather refreshed every 15 min (Open-Meteo) ·
+        spot price from ENTSO-E day-ahead.{_night_caption_extra}
+      </span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 l1, l2, l3, l4, l5 = st.columns(5)
 
 if live_weather:
     cloud = live_weather["cloud_cover_pct"]
     cloud_label = "clear" if cloud < 25 else ("partly" if cloud < 75 else "overcast")
+    if _is_night_at_park:
+        sun_delta = f"night at park ({_park_local_hour_label})"
+    else:
+        sun_delta = cloud_label
     l1.metric(
         "Sun (live)",
         f"{live_weather['ghi_w_m2']:,.0f} W/m²",
-        delta=cloud_label,
+        delta=sun_delta,
         delta_color="off",
-        help=f"Global Horizontal Irradiance from Open-Meteo · cloud cover {cloud:.0f}% · refreshed every 15 min",
+        help=(
+            f"Global Horizontal Irradiance at the park's GPS coords, refreshed every 15 min by Open-Meteo. "
+            f"Park local time: {_park_local_hour_label}. Cloud cover {cloud:.0f}%. "
+            + (
+                "GHI is near zero because it's nighttime at the park. "
+                "When you're checking from Europe (e.g. 14:00 CET), Texas is at ~06:00 (just after sunrise), "
+                "California at ~04:00 (still dark) — solar panels physically cannot produce. "
+                "The Time series chart below shows historical T12M production (sun-related but past data) "
+                "so don't be confused: time series independent of current hour."
+                if _is_night_at_park else
+                "Open-Meteo aggregates ECMWF + GFS + Meteo-France etc., updates every ~15 min."
+            )
+        ),
     )
     l2.metric(
         "Air temp (live)",
