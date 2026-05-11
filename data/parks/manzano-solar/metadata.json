@@ -13,7 +13,10 @@
   "allianz_stake_pct": 100,
   "acquisition_year": 2010,
   "press_release_url": "https://www.pv-tech.org/ibc_solar_sells_11-2mw_italian_park_to_allianz_specialised_investments/",
-  "notes": "Grid-connected 7 déc 2010, acquis par Allianz Specialised Investments. 47 000 modules polycrystalline + 3 600 thin-film sur 32 ha, Manzano (Udine, Frioul-VG). ~13 GWh/an. Évolution technologique vs Brindisi : utility-scale unique.",
+  "notes": "Grid-connected 7 déc 2010, acquis par Allianz Specialised Investments. 47 000 modules polycrystalline + 3 600 thin-film sur 32 ha, Manzano (Udine, Frioul-VG). ~13 GWh/an. Premier utility-scale ACP en Italie. Sous Conto Energia II — revenue locked-in jusqu'à déc 2030, wholesale spot non pertinent.",
+  "fit_strike_price_eur_mwh": 318.0,
+  "fit_scheme": "Conto Energia II (DM 19/02/2007) — base €0.346/kWh non-integrated >20 kW H2-2010 vintage, post Spalma-Incentivi 2015 Option C (-8% pour P>900 kW)",
+  "fit_expiry_year": 2030,
   "has_pvgis_estimate": true,
   "has_reported_production": true
 }
