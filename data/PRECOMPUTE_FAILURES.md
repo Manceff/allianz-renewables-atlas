@@ -1,6 +1,6 @@
 # Précompute — échecs
 
-_Généré le 2026-06-22T11:58:59Z sur 9 parcs traités._
+_Généré le 2026-06-29T11:03:55Z sur 9 parcs traités._
 
 ## sentinel — désactivé pour ce run
 
